@@ -1,0 +1,15 @@
+{
+  "project_name": "BULK SHARE",
+  "version": "1.0.0-mvp",
+  "framework": "gsd-core",
+  "architecture": "modular-monolith",
+  "stack": {
+    "frontend": "React + TypeScript + Vite + Tailwind CSS + shadcn/ui",
+    "backend": "FastAPI + SQLAlchemy 2.0 + Alembic + Pydantic v2",
+    "database": "PostgreSQL (Supabase)",
+    "auth": "Supabase Auth",
+    "storage": "Supabase Storage",
+    "testing": "Pytest + Vitest + Playwright"
+  },
+  "current_milestone": 1
+}
