@@ -8,6 +8,32 @@ from app.schemas.user import (
     DemoLoginRequest,
     DemoTokenResponse,
 )
+from app.schemas.group import (
+    GroupBase,
+    GroupCreate,
+    GroupUpdate,
+    GroupRead,
+    GroupMemberRead,
+    GroupInvitationCreate,
+    GroupInvitationRead,
+    InvitationRedeemRequest,
+)
+from app.schemas.catalog import (
+    ProductCategory,
+    ProductVariantBase,
+    ProductVariantCreate,
+    ProductVariantRead,
+    ProductBase,
+    ProductCreate,
+    ProductRead,
+)
+from app.schemas.grocery_list import (
+    BrandPreference,
+    GroceryListItemCreate,
+    GroceryListItemUpdate,
+    GroceryListItemRead,
+    MyGroceryListSummary,
+)
 
 __all__ = [
     "HealthResponse",
@@ -21,4 +47,24 @@ __all__ = [
     "UserRead",
     "DemoLoginRequest",
     "DemoTokenResponse",
+    "GroupBase",
+    "GroupCreate",
+    "GroupUpdate",
+    "GroupRead",
+    "GroupMemberRead",
+    "GroupInvitationCreate",
+    "GroupInvitationRead",
+    "InvitationRedeemRequest",
+    "ProductCategory",
+    "ProductVariantBase",
+    "ProductVariantCreate",
+    "ProductVariantRead",
+    "ProductBase",
+    "ProductCreate",
+    "ProductRead",
+    "BrandPreference",
+    "GroceryListItemCreate",
+    "GroceryListItemUpdate",
+    "GroceryListItemRead",
+    "MyGroceryListSummary",
 ]

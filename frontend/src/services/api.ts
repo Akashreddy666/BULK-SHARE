@@ -1,4 +1,16 @@
-import { HealthResponse, Neighborhood, User } from '@/types'
+import {
+  HealthResponse,
+  Neighborhood,
+  User,
+  BuyingGroup,
+  CreateGroupInput,
+  GroupInvitation,
+  Product,
+  ProductCategory,
+  HouseholdGroceryList,
+  GroceryListItem,
+  BrandPreference,
+} from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -49,6 +61,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       }
       throw new ApiError(detail, res.status)
     }
+    if (res.status === 204) {
+      return {} as T
+    }
     return (await res.json()) as T
   } catch (err: unknown) {
     if (err instanceof ApiError) throw err
@@ -58,6 +73,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  // Auth & System
   getHealth: () => request<HealthResponse>('/health'),
   getNeighborhoods: () => request<Neighborhood[]>('/neighborhoods'),
   getMe: () => request<User>('/users/me'),
@@ -70,5 +86,83 @@ export const api = {
     request<{ access_token: string; user: User; demo_mode: boolean }>('/users/demo-login', {
       method: 'POST',
       body: JSON.stringify({ role, email }),
+    }),
+
+  // Groups
+  getGroups: (params?: {
+    neighborhood_id?: string
+    my_groups_only?: boolean
+    visibility?: string
+    status?: string
+  }) => {
+    const query = new URLSearchParams()
+    if (params?.neighborhood_id) query.set('neighborhood_id', params.neighborhood_id)
+    if (params?.my_groups_only !== undefined) query.set('my_groups_only', String(params.my_groups_only))
+    if (params?.visibility) query.set('visibility', params.visibility)
+    if (params?.status) query.set('status', params.status)
+    const qs = query.toString() ? `?${query.toString()}` : ''
+    return request<BuyingGroup[]>(`/groups${qs}`)
+  },
+  getGroup: (id: string) => request<BuyingGroup>(`/groups/${id}`),
+  createGroup: (data: CreateGroupInput) =>
+    request<BuyingGroup>('/groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateGroup: (id: string, data: Partial<CreateGroupInput>) =>
+    request<BuyingGroup>(`/groups/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  joinGroup: (id: string) =>
+    request<BuyingGroup>(`/groups/${id}/join`, {
+      method: 'POST',
+    }),
+  leaveGroup: (id: string) =>
+    request<BuyingGroup>(`/groups/${id}/leave`, {
+      method: 'POST',
+    }),
+  createGroupInvitation: (groupId: string, data: { expires_in_days?: number; max_uses?: number }) =>
+    request<GroupInvitation>(`/groups/${groupId}/invitations`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  redeemInvitation: (token: string) =>
+    request<BuyingGroup>('/groups/invitations/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  // Catalog
+  getProducts: (category?: ProductCategory | string) => {
+    const qs = category ? `?category=${category}` : ''
+    return request<Product[]>(`/products${qs}`)
+  },
+  getProductVariants: (productId: string) =>
+    request<Product['variants']>(`/products/${productId}/variants`),
+
+  // Household Grocery Lists
+  getMyGroceryItems: (groupId: string) =>
+    request<HouseholdGroceryList>(`/groups/${groupId}/my-items`),
+  addGroceryItem: (
+    groupId: string,
+    data: { variant_id: string; pack_quantity: number; brand_preference: BrandPreference }
+  ) =>
+    request<GroceryListItem>(`/groups/${groupId}/my-items`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateGroceryItem: (
+    groupId: string,
+    itemId: string,
+    data: { pack_quantity?: number; brand_preference?: BrandPreference }
+  ) =>
+    request<GroceryListItem>(`/groups/${groupId}/my-items/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteGroceryItem: (groupId: string, itemId: string) =>
+    request<{ success: boolean }>(`/groups/${groupId}/my-items/${itemId}`, {
+      method: 'DELETE',
     }),
 }

@@ -1,29 +1,11 @@
 # BULK SHARE — Project State
 
-**Current Phase:** Milestone 1 Completed (Awaiting Approval for Milestone 2)  
-**Status:** Milestone 1 Implemented & Verified  
-**Tests Passed:**
-- Backend: 7/7 Pytest tests passing (100%)
-- Frontend: 3/3 Vitest tests passing (100%)
-- Production Build: `tsc && vite build` succeeded (0 errors)
-- Database: Alembic migration `0001` applied; seed data loaded for `Indiranagar Central` and 4 demo personas.
+**Current Phase:** Milestone 2 Complete (Awaiting User Review / Approval for Milestone 3)  
+**Status:** Ready  
+**Completed Milestones:**
+- **Milestone 1:** Project setup, monorepo structure, FastAPI backend, SQLite/PostgreSQL configuration, Supabase auth & JWT security, green-and-white React UI, role switcher & initial landing page.
+- **Milestone 2:** Neighborhood groups (public & private with token invites), membership management, 5 staple grocery catalog (Rice, Oil, Dal, Sugar, Flour) with sealed pack variants, household grocery lists with exact/flexible brand preference, and strict household privacy isolation (FR-LIST-04).
 
-**Milestone 1 Deliverables:**
-- [x] Monorepo structure (`backend/`, `frontend/`, `.planning/`)
-- [x] Python FastAPI modular monolith backend with Pydantic v2 schemas and SQLAlchemy models
-- [x] Alembic migration and database seeder
-- [x] JWT authentication security dependency with demo evaluator token support
-- [x] REST endpoints: `GET /health`, `GET /users/me`, `PATCH /users/me`, `GET /neighborhoods`, `POST /users/demo-login`
-- [x] React 19 + TypeScript + Vite + Tailwind CSS frontend
-- [x] Modern green & clean white grocery design theme
-- [x] Prominent simulation banner across public pages (FR-DEMO-01)
-- [x] Responsive Landing Page with Hero, Interactive Savings Calculator, Value Propositions, How It Works
-- [x] Auth Modal (Email/Password, Google OAuth simulation)
-- [x] Demo Role Switcher for instant evaluator persona testing (Customer, Organizer, Wholesaler, Admin)
-- [x] Role-based Dashboard Shells (Customer, Organizer, Supplier, Admin)
-- [x] Pytest backend tests and Vitest frontend tests passing
-- [x] Complete README.md and .env.example documentation
-
-**Next Phase:** Milestone 2 (Neighborhood Groups, Membership, Grocery Catalog & Private Lists)  
-**Blocked by:** User review and approval of Milestone 1  
-**Last Updated:** 2026-11-19
+**Next Milestone:** Milestone 3 (Grocery Aggregation, Wholesale Price Tiers, Savings Calculations, and Supplier Quotations)  
+**Blocked by:** Awaiting user approval to begin Milestone 3  
+**Last Updated:** 2026-11-20
