@@ -16,6 +16,12 @@ import {
   SupplierProfile,
   SupplierProductOffer,
   SupplierQuotation,
+  ConfirmationRound,
+  MemberConfirmation,
+  GroupOrder,
+  AuditLog,
+  FulfillmentPreference,
+  MemberConfirmationStatus,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
@@ -239,4 +245,41 @@ export const api = {
     request<SupplierQuotation>(`/quotations/${quotationId}`),
   getSnapshotDetail: (snapshotId: string) =>
     request<DemandSnapshot>(`/quotations/snapshots/${snapshotId}`),
+
+  // Milestone 4: Confirmations & Order Locking
+  selectQuotation: (
+    groupId: string,
+    data: { quotation_id: string; deadline_hours?: number; notes?: string }
+  ) =>
+    request<ConfirmationRound>(`/groups/${groupId}/select-quotation`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getConfirmationRound: (groupId: string) =>
+    request<ConfirmationRound | null>(`/groups/${groupId}/confirmation-round`),
+  confirmMemberAllocation: (
+    groupId: string,
+    data: {
+      status: MemberConfirmationStatus
+      fulfillment_preference?: FulfillmentPreference
+      delivery_address?: string
+      rejection_reason?: string
+    }
+  ) =>
+    request<MemberConfirmation>(`/groups/${groupId}/confirmation-round/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  recalculateOrder: (groupId: string) =>
+    request<ConfirmationRound>(`/groups/${groupId}/recalculate`, {
+      method: 'POST',
+    }),
+  lockGroupOrder: (groupId: string) =>
+    request<GroupOrder>(`/groups/${groupId}/lock-order`, {
+      method: 'POST',
+    }),
+  getGroupOrder: (groupId: string) =>
+    request<GroupOrder | null>(`/groups/${groupId}/order`),
+  getGroupAuditLogs: (groupId: string) =>
+    request<AuditLog[]>(`/audit/groups/${groupId}`),
 }

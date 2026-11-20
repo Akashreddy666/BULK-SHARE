@@ -286,3 +286,72 @@ export interface HouseholdSavingsResponse {
   savings_percentage: number
   items: HouseholdSavingsItem[]
 }
+
+
+// --- Milestone 4: Confirmation Rounds, Member Confirmations & Locked Orders ---
+
+export type RoundStatus = 'OPEN' | 'COMPLETED' | 'FAILED' | 'RECALCULATED'
+export type MemberConfirmationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
+export type FulfillmentPreference = 'PICKUP' | 'HOME_DELIVERY'
+export type OrderLockStatus = 'LOCKED' | 'PROCUREMENT_PENDING' | 'PROCURED' | 'FULFILLED' | 'CANCELLED'
+
+export interface MemberConfirmation {
+  id: string
+  confirmation_round_id: string
+  group_id: string
+  user_id: string
+  user_name?: string | null
+  status: MemberConfirmationStatus
+  rejection_reason?: string | null
+  total_household_cost: number
+  total_household_savings: number
+  confirmed_at?: string | null
+  fulfillment_preference: FulfillmentPreference
+  delivery_address?: string | null
+  created_at: string
+}
+
+export interface ConfirmationRound {
+  id: string
+  group_id: string
+  selected_quotation_id: string
+  round_number: number
+  status: RoundStatus
+  deadline: string
+  notes?: string | null
+  total_members: number
+  confirmed_count: number
+  rejected_count: number
+  pending_count: number
+  confirmations: MemberConfirmation[]
+  selected_quotation?: SupplierQuotation | null
+  created_at: string
+}
+
+export interface GroupOrder {
+  id: string
+  group_id: string
+  selected_quotation_id: string
+  confirmation_round_id: string
+  status: OrderLockStatus
+  total_retail_amount: number
+  total_wholesale_amount: number
+  total_savings_amount: number
+  total_packs: number
+  locked_at: string
+  locked_by_user_id: string
+  order_allocations_data: string
+  created_at: string
+  supplier_name?: string | null
+}
+
+export interface AuditLog {
+  id: string
+  entity_type: string
+  entity_id: string
+  action: string
+  actor_user_id?: string | null
+  actor_role?: string | null
+  details?: string | null
+  created_at: string
+}

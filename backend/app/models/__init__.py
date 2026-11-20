@@ -29,6 +29,16 @@ from app.models.quotation import (
     SupplierQuotation,
     QuotationItem,
 )
+from app.models.order import (
+    RoundStatus,
+    MemberConfirmationStatus,
+    FulfillmentPreference,
+    OrderLockStatus,
+    ConfirmationRound,
+    MemberConfirmation,
+    GroupOrder,
+)
+from app.models.audit import AuditLog
 
 __all__ = [
     "Base",
@@ -53,4 +63,12 @@ __all__ = [
     "DemandSnapshot",
     "SupplierQuotation",
     "QuotationItem",
+    "RoundStatus",
+    "MemberConfirmationStatus",
+    "FulfillmentPreference",
+    "OrderLockStatus",
+    "ConfirmationRound",
+    "MemberConfirmation",
+    "GroupOrder",
+    "AuditLog",
 ]

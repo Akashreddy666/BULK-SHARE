@@ -14,7 +14,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { BuyingGroup, Neighborhood } from '@/types'
+import { BuyingGroup, Neighborhood, ConfirmationRound } from '@/types'
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
@@ -28,6 +28,7 @@ import { GroupDetailModal } from '@/components/groups/GroupDetailModal'
 import { ProductCatalogModal } from '@/components/catalog/ProductCatalogModal'
 import { HouseholdGroceryListModal } from '@/components/grocery/HouseholdGroceryListModal'
 import { HouseholdSavingsModal } from '@/components/savings/HouseholdSavingsModal'
+import { MemberConfirmationModal } from '@/components/confirmation/MemberConfirmationModal'
 
 interface CustomerDashboardProps {
   onOpenDemoSwitcher: () => void
@@ -51,6 +52,9 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
   const [isListOpen, setIsListOpen] = useState(false)
   const [savingsGroup, setSavingsGroup] = useState<BuyingGroup | null>(null)
   const [isSavingsOpen, setIsSavingsOpen] = useState(false)
+  const [confirmGroup, setConfirmGroup] = useState<BuyingGroup | null>(null)
+  const [confirmRound, setConfirmRound] = useState<ConfirmationRound | null>(null)
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
 
   const loadGroups = async () => {
     setIsLoading(true)
@@ -347,7 +351,34 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
           setSavingsGroup(grp)
           setIsSavingsOpen(true)
         }}
+        onOpenConfirmation={async (grp) => {
+          try {
+            const r = await api.getConfirmationRound(grp.id)
+            if (!r) {
+              alert('Confirmation round has not opened yet.')
+              return
+            }
+            setConfirmGroup(grp)
+            setConfirmRound(r)
+            setIsConfirmOpen(true)
+          } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : 'Failed to load confirmation round')
+          }
+        }}
       />
+
+      {confirmGroup && (
+        <MemberConfirmationModal
+          isOpen={isConfirmOpen}
+          onClose={() => setIsConfirmOpen(false)}
+          groupId={confirmGroup.id}
+          groupName={confirmGroup.name}
+          round={confirmRound}
+          onConfirmed={() => {
+            loadGroups()
+          }}
+        />
+      )}
 
       {savingsGroup && (
         <HouseholdSavingsModal

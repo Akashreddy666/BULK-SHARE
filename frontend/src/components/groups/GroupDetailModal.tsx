@@ -29,6 +29,7 @@ interface GroupDetailModalProps {
   onOpenCatalog: (group: BuyingGroup) => void
   onOpenMyList: (group: BuyingGroup) => void
   onOpenSavings?: (group: BuyingGroup) => void
+  onOpenConfirmation?: (group: BuyingGroup) => void
 }
 
 export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
@@ -39,6 +40,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
   onOpenCatalog,
   onOpenMyList,
   onOpenSavings,
+  onOpenConfirmation,
 }) => {
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false)
   const [invitation, setInvitation] = useState<GroupInvitation | null>(null)
@@ -271,6 +273,19 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
           <div className="flex items-center gap-2 ml-auto">
             {isMember ? (
               <>
+                {group.status === 'CONFIRMING' && onOpenConfirmation && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                    onClick={() => {
+                      onClose()
+                      onOpenConfirmation(group)
+                    }}
+                  >
+                    Confirm Order (M4)
+                  </Button>
+                )}
                 {onOpenSavings && (
                   <Button
                     size="sm"
