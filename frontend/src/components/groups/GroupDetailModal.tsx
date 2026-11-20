@@ -28,6 +28,7 @@ interface GroupDetailModalProps {
   onGroupUpdated: (group: BuyingGroup) => void
   onOpenCatalog: (group: BuyingGroup) => void
   onOpenMyList: (group: BuyingGroup) => void
+  onOpenSavings?: (group: BuyingGroup) => void
 }
 
 export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
@@ -37,6 +38,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
   onGroupUpdated,
   onOpenCatalog,
   onOpenMyList,
+  onOpenSavings,
 }) => {
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false)
   const [invitation, setInvitation] = useState<GroupInvitation | null>(null)
@@ -269,6 +271,20 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
           <div className="flex items-center gap-2 ml-auto">
             {isMember ? (
               <>
+                {onOpenSavings && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    onClick={() => {
+                      onClose()
+                      onOpenSavings(group)
+                    }}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-500" />
+                    View Savings
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"

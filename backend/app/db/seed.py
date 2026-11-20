@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
@@ -15,6 +16,17 @@ from app.models.group import (
     GroupInvitation,
 )
 from app.models.grocery_list import GroceryListItem, BrandPreference
+from app.models.wholesale import (
+    SupplierProfile,
+    WholesalePriceTier,
+    SupplierProductOffer,
+)
+from app.models.quotation import (
+    DemandSnapshot,
+    SupplierQuotation,
+    QuotationItem,
+    QuotationStatus,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -310,6 +322,78 @@ def seed_data(session: Session) -> None:
 
     session.commit()
 
+    logger.info("Checking and seeding wholesale price tiers...")
+    # Tier structure: Tier 1 (5+ packs, ~15% off), Tier 2 (15+ packs, ~22% off), Tier 3 (30+ packs, ~30% off)
+    variants = session.execute(select(ProductVariant)).scalars().all()
+    for v in variants:
+        t1_exists = session.execute(
+            select(WholesalePriceTier).where(
+                WholesalePriceTier.variant_id == v.id,
+                WholesalePriceTier.tier_label == "Tier 1 (5+ packs)",
+            )
+        ).scalar_one_or_none()
+
+        if not t1_exists:
+            p_retail = v.reference_retail_price
+            t1 = WholesalePriceTier(
+                variant_id=v.id,
+                min_quantity=5,
+                price_per_pack=round(p_retail * 0.85, 2),
+                tier_label="Tier 1 (5+ packs)",
+                is_active=True,
+            )
+            t2 = WholesalePriceTier(
+                variant_id=v.id,
+                min_quantity=15,
+                price_per_pack=round(p_retail * 0.78, 2),
+                tier_label="Tier 2 (15+ packs)",
+                is_active=True,
+            )
+            t3 = WholesalePriceTier(
+                variant_id=v.id,
+                min_quantity=30,
+                price_per_pack=round(p_retail * 0.70, 2),
+                tier_label="Tier 3 (30+ packs)",
+                is_active=True,
+            )
+            session.add_all([t1, t2, t3])
+    session.commit()
+
+    logger.info("Checking and seeding demo supplier profile & offers...")
+    supplier_user_id = "aaaaaaa3-3333-3333-3333-333333333333"
+    supplier_prof = session.execute(
+        select(SupplierProfile).where(SupplierProfile.user_id == supplier_user_id)
+    ).scalar_one_or_none()
+
+    if not supplier_prof:
+        supplier_prof = SupplierProfile(
+            id="supp-prof-kisan-01",
+            user_id=supplier_user_id,
+            company_name="Kisan Wholesale Agro Supplies Pvt Ltd",
+            gstin="29ABCDE1234F1Z5",
+            address="Plot 42, APMC Yard, Yeshwanthpur",
+            city="Bengaluru",
+            phone="+91 98765 43212",
+            is_verified=True,
+            description="APMC licensed bulk distributor supplying premium grains, pulses, and edible oils across Bengaluru.",
+        )
+        session.add(supplier_prof)
+        session.flush()
+
+        # Add sample supplier product offers
+        for v in variants[:6]:
+            offer = SupplierProductOffer(
+                supplier_id=supplier_prof.id,
+                variant_id=v.id,
+                offer_price_per_pack=round(v.reference_retail_price * 0.80, 2),
+                min_order_packs=5,
+                max_order_packs=200,
+                is_active=True,
+            )
+            session.add(offer)
+
+    session.commit()
+
     logger.info("Checking and seeding demo buying groups...")
     now = datetime.now(timezone.utc)
     for g_data in DEMO_GROUPS:
@@ -368,25 +452,56 @@ def seed_data(session: Session) -> None:
 
     session.commit()
 
-    logger.info("Checking and seeding sample household grocery items for Priya...")
-    priya_items = [
+    logger.info("Checking and seeding sample household grocery items...")
+    # Add grocery items for Priya and Rahul so group total reaches tier thresholds (5+ packs)
+    demo_items = [
+        # Priya's items
         {
             "group_id": "group-indiranagar-01",
             "user_id": "aaaaaaa1-1111-1111-1111-111111111111",
             "variant_id": "var-rice-01",  # 5kg rice
-            "pack_quantity": 2,
+            "pack_quantity": 3,
             "brand_preference": BrandPreference.EXACT.value,
         },
         {
             "group_id": "group-indiranagar-01",
             "user_id": "aaaaaaa1-1111-1111-1111-111111111111",
             "variant_id": "var-oil-02",  # 5L oil
-            "pack_quantity": 1,
+            "pack_quantity": 2,
+            "brand_preference": BrandPreference.FLEXIBLE.value,
+        },
+        {
+            "group_id": "group-indiranagar-01",
+            "user_id": "aaaaaaa1-1111-1111-1111-111111111111",
+            "variant_id": "var-dal-01",  # 1kg Toor Dal
+            "pack_quantity": 4,
+            "brand_preference": BrandPreference.EXACT.value,
+        },
+        # Rahul's items in the same group (pools demand to unlock Tier 1)
+        {
+            "group_id": "group-indiranagar-01",
+            "user_id": "aaaaaaa2-2222-2222-2222-222222222222",
+            "variant_id": "var-rice-01",  # 3 + 3 = 6 packs (unlocks Tier 1 >= 5)
+            "pack_quantity": 3,
+            "brand_preference": BrandPreference.EXACT.value,
+        },
+        {
+            "group_id": "group-indiranagar-01",
+            "user_id": "aaaaaaa2-2222-2222-2222-222222222222",
+            "variant_id": "var-oil-02",  # 2 + 4 = 6 packs (unlocks Tier 1 >= 5)
+            "pack_quantity": 4,
+            "brand_preference": BrandPreference.EXACT.value,
+        },
+        {
+            "group_id": "group-indiranagar-01",
+            "user_id": "aaaaaaa2-2222-2222-2222-222222222222",
+            "variant_id": "var-dal-01",  # 4 + 2 = 6 packs (unlocks Tier 1 >= 5)
+            "pack_quantity": 2,
             "brand_preference": BrandPreference.FLEXIBLE.value,
         },
     ]
 
-    for item_data in priya_items:
+    for item_data in demo_items:
         stmt = select(GroceryListItem).where(
             GroceryListItem.group_id == item_data["group_id"],
             GroceryListItem.user_id == item_data["user_id"],
@@ -396,7 +511,62 @@ def seed_data(session: Session) -> None:
         if not existing_item:
             item = GroceryListItem(**item_data)
             session.add(item)
-            logger.info("Added grocery item: %s packs for Priya in %s", item.pack_quantity, item.group_id)
+        else:
+            existing_item.pack_quantity = item_data["pack_quantity"]
+            session.add(existing_item)
+
+    session.commit()
+
+    logger.info("Checking and seeding sample demand snapshot and quotation for Indiranagar...")
+    existing_snap = session.execute(
+        select(DemandSnapshot).where(DemandSnapshot.group_id == "group-indiranagar-01")
+    ).scalar_one_or_none()
+
+    if not existing_snap:
+        from app.services.aggregation import create_demand_snapshot
+        snapshot = create_demand_snapshot("group-indiranagar-01", session)
+        logger.info("Created demand snapshot #%d for Indiranagar", snapshot.snapshot_version)
+
+        # Seed sample quotation from Kisan Wholesale
+        quote = SupplierQuotation(
+            id="quote-kisan-01",
+            demand_snapshot_id=snapshot.id,
+            supplier_id="supp-prof-kisan-01",
+            status=QuotationStatus.SUBMITTED.value,
+            total_quoted_price=6420.0,
+            valid_until=now + timedelta(days=3),
+            notes="Ready stock available in Yeshwanthpur APMC yard. Same-day dispatch upon order confirmation.",
+        )
+        session.add(quote)
+        session.flush()
+
+        # Line items
+        quote_items = [
+            QuotationItem(
+                quotation_id=quote.id,
+                variant_id="var-rice-01",
+                quoted_packs=6,
+                quoted_price_per_pack=295.0,  # Retail: 360 -> Wholesale: 295 (18% off)
+                line_total=1770.0,
+            ),
+            QuotationItem(
+                quotation_id=quote.id,
+                variant_id="var-oil-02",
+                quoted_packs=6,
+                quoted_price_per_pack=600.0,  # Retail: 720 -> Wholesale: 600 (17% off)
+                line_total=3600.0,
+            ),
+            QuotationItem(
+                quotation_id=quote.id,
+                variant_id="var-dal-01",
+                quoted_packs=6,
+                quoted_price_per_pack=145.0,  # Retail: 175 -> Wholesale: 145 (17% off)
+                line_total=870.0,
+            ),
+        ]
+        session.add_all(quote_items)
+        session.commit()
+        logger.info("Created sample quotation from Kisan Wholesale Supplies")
 
     session.commit()
     logger.info("Database seeding completed successfully.")

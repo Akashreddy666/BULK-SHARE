@@ -18,6 +18,17 @@ from app.models.grocery_list import (
     GroceryListItem,
     BrandPreference,
 )
+from app.models.wholesale import (
+    SupplierProfile,
+    WholesalePriceTier,
+    SupplierProductOffer,
+)
+from app.models.quotation import (
+    QuotationStatus,
+    DemandSnapshot,
+    SupplierQuotation,
+    QuotationItem,
+)
 
 __all__ = [
     "Base",
@@ -35,4 +46,11 @@ __all__ = [
     "ProductVariant",
     "GroceryListItem",
     "BrandPreference",
+    "SupplierProfile",
+    "WholesalePriceTier",
+    "SupplierProductOffer",
+    "QuotationStatus",
+    "DemandSnapshot",
+    "SupplierQuotation",
+    "QuotationItem",
 ]

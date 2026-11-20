@@ -27,6 +27,7 @@ import { JoinByInviteModal } from '@/components/groups/JoinByInviteModal'
 import { GroupDetailModal } from '@/components/groups/GroupDetailModal'
 import { ProductCatalogModal } from '@/components/catalog/ProductCatalogModal'
 import { HouseholdGroceryListModal } from '@/components/grocery/HouseholdGroceryListModal'
+import { HouseholdSavingsModal } from '@/components/savings/HouseholdSavingsModal'
 
 interface CustomerDashboardProps {
   onOpenDemoSwitcher: () => void
@@ -48,6 +49,8 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
   const [isCatalogOpen, setIsCatalogOpen] = useState(false)
   const [listGroup, setListGroup] = useState<BuyingGroup | null>(null)
   const [isListOpen, setIsListOpen] = useState(false)
+  const [savingsGroup, setSavingsGroup] = useState<BuyingGroup | null>(null)
+  const [isSavingsOpen, setIsSavingsOpen] = useState(false)
 
   const loadGroups = async () => {
     setIsLoading(true)
@@ -340,7 +343,20 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
         }}
         onOpenCatalog={handleOpenCatalog}
         onOpenMyList={handleOpenMyList}
+        onOpenSavings={(grp) => {
+          setSavingsGroup(grp)
+          setIsSavingsOpen(true)
+        }}
       />
+
+      {savingsGroup && (
+        <HouseholdSavingsModal
+          isOpen={isSavingsOpen}
+          onClose={() => setIsSavingsOpen(false)}
+          groupId={savingsGroup.id}
+          groupName={savingsGroup.name}
+        />
+      )}
 
       {catalogGroup && (
         <ProductCatalogModal

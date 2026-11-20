@@ -151,3 +151,138 @@ export interface HouseholdGroceryList {
   total_packs: number
   total_reference_retail_price: number
 }
+
+// --- Milestone 3: Wholesale Tiers, Demand Aggregation, Quotations & Savings ---
+
+export interface WholesalePriceTier {
+  id: string
+  variant_id: string
+  min_quantity: number
+  price_per_pack: number
+  tier_label: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface SupplierProfile {
+  id: string
+  user_id: string
+  company_name: string
+  gstin?: string | null
+  address?: string | null
+  city: string
+  phone?: string | null
+  is_verified: boolean
+  description?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SupplierProductOffer {
+  id: string
+  supplier_id: string
+  variant_id: string
+  offer_price_per_pack: number
+  min_order_packs: number
+  max_order_packs?: number | null
+  is_active: boolean
+  variant_display_name?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DemandLineItem {
+  variant_id: string
+  product_name: string
+  category: string
+  brand: string
+  pack_quantity: number
+  pack_unit: string
+  variant_display_name: string
+  reference_retail_price: number
+  total_packs: number
+  total_quantity_units: number
+  total_retail_value: number
+  qualified_tier?: WholesalePriceTier | null
+  next_tier?: WholesalePriceTier | null
+  packs_to_next_tier?: number | null
+  best_wholesale_price?: number | null
+  estimated_wholesale_cost?: number | null
+  estimated_savings?: number | null
+  savings_percentage?: number | null
+}
+
+export interface DemandSummaryResponse {
+  group_id: string
+  group_name: string
+  snapshot_version?: number | null
+  total_variants: number
+  total_packs: number
+  total_retail_value: number
+  estimated_wholesale_value: number
+  estimated_savings: number
+  savings_percentage: number
+  items: DemandLineItem[]
+}
+
+export interface DemandSnapshot {
+  id: string
+  group_id: string
+  snapshot_version: number
+  snapshot_data: string
+  total_retail_value: number
+  total_packs: number
+  created_at: string
+}
+
+export interface QuotationItem {
+  id: string
+  quotation_id: string
+  variant_id: string
+  quoted_packs: number
+  quoted_price_per_pack: number
+  line_total: number
+  variant_display_name?: string | null
+  reference_retail_price?: number | null
+}
+
+export interface SupplierQuotation {
+  id: string
+  demand_snapshot_id: string
+  supplier_id: string
+  supplier_name?: string | null
+  status: 'SUBMITTED' | 'EXPIRED' | 'ACCEPTED' | 'REJECTED'
+  total_quoted_price: number
+  total_retail_value?: number | null
+  savings_amount?: number | null
+  savings_percentage?: number | null
+  valid_until: string
+  notes?: string | null
+  items: QuotationItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface HouseholdSavingsItem {
+  variant_id: string
+  variant_display_name: string
+  brand_preference: string
+  pack_quantity: number
+  reference_retail_price: number
+  retail_total: number
+  wholesale_price_per_pack?: number | null
+  wholesale_total?: number | null
+  savings_amount?: number | null
+  savings_percentage?: number | null
+}
+
+export interface HouseholdSavingsResponse {
+  group_id: string
+  user_id: string
+  total_packs: number
+  total_retail_cost: number
+  total_wholesale_cost: number
+  total_savings: number
+  savings_percentage: number
+  items: HouseholdSavingsItem[]
+}

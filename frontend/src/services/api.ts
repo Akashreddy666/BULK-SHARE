@@ -10,6 +10,12 @@ import {
   HouseholdGroceryList,
   GroceryListItem,
   BrandPreference,
+  DemandSummaryResponse,
+  DemandSnapshot,
+  HouseholdSavingsResponse,
+  SupplierProfile,
+  SupplierProductOffer,
+  SupplierQuotation,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
@@ -165,4 +171,72 @@ export const api = {
     request<{ success: boolean }>(`/groups/${groupId}/my-items/${itemId}`, {
       method: 'DELETE',
     }),
+
+  // Milestone 3: Demand Aggregation & Snapshots
+  getDemandSummary: (groupId: string) =>
+    request<DemandSummaryResponse>(`/groups/${groupId}/demand-summary`),
+  triggerDemandSnapshot: (groupId: string) =>
+    request<DemandSnapshot>(`/groups/${groupId}/demand-snapshot`, {
+      method: 'POST',
+    }),
+  getDemandSnapshots: (groupId: string) =>
+    request<DemandSnapshot[]>(`/groups/${groupId}/demand-snapshots`),
+  getMySavings: (groupId: string) =>
+    request<HouseholdSavingsResponse>(`/groups/${groupId}/savings`),
+
+  // Milestone 3: Supplier Profiles & Product Offers
+  getMySupplierProfile: () =>
+    request<SupplierProfile>('/suppliers/me/profile'),
+  createSupplierProfile: (data: Partial<SupplierProfile>) =>
+    request<SupplierProfile>('/suppliers/me/profile', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateSupplierProfile: (data: Partial<SupplierProfile>) =>
+    request<SupplierProfile>('/suppliers/me/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  getMySupplierOffers: () =>
+    request<SupplierProductOffer[]>('/suppliers/me/offers'),
+  createSupplierOffer: (data: {
+    variant_id: string
+    offer_price_per_pack: number
+    min_order_packs?: number
+    max_order_packs?: number | null
+  }) =>
+    request<SupplierProductOffer>('/suppliers/me/offers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateSupplierOffer: (
+    offerId: string,
+    data: Partial<Pick<SupplierProductOffer, 'offer_price_per_pack' | 'min_order_packs' | 'max_order_packs' | 'is_active'>>
+  ) =>
+    request<SupplierProductOffer>(`/suppliers/me/offers/${offerId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteSupplierOffer: (offerId: string) =>
+    request<{ success: boolean }>(`/suppliers/me/offers/${offerId}`, {
+      method: 'DELETE',
+    }),
+
+  // Milestone 3: Quotations
+  getGroupQuotations: (groupId: string) =>
+    request<SupplierQuotation[]>(`/groups/${groupId}/quotations`),
+  submitQuotation: (data: {
+    demand_snapshot_id: string
+    valid_until: string
+    notes?: string
+    items: Array<{ variant_id: string; quoted_price_per_pack: number }>
+  }) =>
+    request<SupplierQuotation>('/quotations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getQuotationDetail: (quotationId: string) =>
+    request<SupplierQuotation>(`/quotations/${quotationId}`),
+  getSnapshotDetail: (snapshotId: string) =>
+    request<DemandSnapshot>(`/quotations/snapshots/${snapshotId}`),
 }
