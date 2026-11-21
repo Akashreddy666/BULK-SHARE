@@ -355,3 +355,143 @@ export interface AuditLog {
   details?: string | null
   created_at: string
 }
+
+export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED'
+export type PaymentMethod = 'UPI' | 'CARD' | 'NET_BANKING' | 'SIMULATED_WALLET'
+
+export interface PaymentTransaction {
+  id: string
+  group_order_id: string
+  user_id: string
+  amount: number
+  currency: string
+  payment_method: string
+  transaction_ref: string
+  receipt_number: string
+  status: PaymentStatus
+  paid_at: string
+  notes?: string | null
+  created_at: string
+}
+
+export interface HouseholdInvoiceItem {
+  product_name: string
+  variant_brand: string
+  package_size: number
+  unit: string
+  quantity: number
+  retail_rate: number
+  wholesale_rate: number
+  retail_total: number
+  wholesale_total: number
+  savings: number
+}
+
+export interface HouseholdInvoice {
+  group_order_id: string
+  group_name: string
+  user_id: string
+  user_name: string
+  user_email: string
+  items: HouseholdInvoiceItem[]
+  subtotal_retail: number
+  subtotal_wholesale: number
+  total_savings: number
+  fulfillment_type: string
+  delivery_surcharge: number
+  final_payable: number
+  payment_status: string
+  receipt_number?: string | null
+  transaction_ref?: string | null
+  paid_at?: string | null
+}
+
+export interface GroupOrderPaymentSummary {
+  group_order_id: string
+  total_wholesale_amount: number
+  total_collected: number
+  total_members: number
+  paid_members_count: number
+  all_paid: boolean
+}
+
+export type ProcurementStatus =
+  | 'PLACED'
+  | 'CONFIRMED_BY_SUPPLIER'
+  | 'DISPATCHED_TO_HUB'
+  | 'DELIVERED_TO_HUB'
+  | 'CANCELLED'
+
+export interface ProcurementOrder {
+  id: string
+  group_order_id: string
+  supplier_id: string
+  po_number: string
+  status: ProcurementStatus
+  total_amount: number
+  estimated_delivery_date?: string | null
+  dispatched_at?: string | null
+  delivered_to_hub_at?: string | null
+  notes?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type FulfillmentStatus =
+  | 'PENDING_PROCUREMENT'
+  | 'READY_FOR_PICKUP'
+  | 'OUT_FOR_DELIVERY'
+  | 'PICKED_UP'
+  | 'DELIVERED'
+
+export interface MemberFulfillment {
+  id: string
+  group_order_id: string
+  user_id: string
+  user_name?: string | null
+  user_phone?: string | null
+  fulfillment_type: string
+  pickup_code?: string | null
+  delivery_address?: string | null
+  status: FulfillmentStatus
+  dispatched_at?: string | null
+  completed_at?: string | null
+  verified_by_user_id?: string | null
+  notes?: string | null
+  created_at: string
+}
+
+export interface Notification {
+  id: string
+  user_id: string
+  title: string
+  message: string
+  type: string
+  link?: string | null
+  is_read: boolean
+  created_at: string
+}
+
+export type DisputeCategory =
+  | 'DAMAGED_PACKS'
+  | 'MISSING_ITEMS'
+  | 'WRONG_ITEM'
+  | 'DELIVERY_ISSUE'
+  | 'OTHER'
+
+export type DisputeStatus = 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'REJECTED'
+
+export interface OrderDispute {
+  id: string
+  group_order_id: string
+  user_id: string
+  user_name?: string | null
+  category: DisputeCategory
+  description: string
+  status: DisputeStatus
+  refund_amount: number
+  resolution_notes?: string | null
+  resolved_at?: string | null
+  resolved_by_user_id?: string | null
+  created_at: string
+}

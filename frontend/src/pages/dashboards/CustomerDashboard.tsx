@@ -14,7 +14,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { BuyingGroup, Neighborhood, ConfirmationRound } from '@/types'
+import { BuyingGroup, Neighborhood, ConfirmationRound, GroupOrder, MemberFulfillment, HouseholdInvoice } from '@/types'
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
@@ -29,6 +29,7 @@ import { ProductCatalogModal } from '@/components/catalog/ProductCatalogModal'
 import { HouseholdGroceryListModal } from '@/components/grocery/HouseholdGroceryListModal'
 import { HouseholdSavingsModal } from '@/components/savings/HouseholdSavingsModal'
 import { MemberConfirmationModal } from '@/components/confirmation/MemberConfirmationModal'
+import { PickupPassCard } from '@/components/fulfillment/PickupPassCard'
 
 interface CustomerDashboardProps {
   onOpenDemoSwitcher: () => void
@@ -55,6 +56,36 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
   const [confirmGroup, setConfirmGroup] = useState<BuyingGroup | null>(null)
   const [confirmRound, setConfirmRound] = useState<ConfirmationRound | null>(null)
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [userOrders, setUserOrders] = useState<
+    { group: BuyingGroup; order: GroupOrder; fulfillment?: MemberFulfillment | null; invoice?: HouseholdInvoice | null }[]
+  >([])
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false)
+
+  const loadOrdersData = async () => {
+    setIsOrdersLoading(true)
+    try {
+      const myGroups = await api.getGroups({ my_groups_only: true })
+      const results = []
+      for (const g of myGroups) {
+        try {
+          const ord = await api.getGroupOrder(g.id)
+          if (ord) {
+            const inv = await api.getHouseholdInvoice(ord.id).catch(() => null)
+            const fuls = await api.getOrderFulfillments(ord.id).catch(() => [])
+            const myFul = fuls.length > 0 ? fuls[0] : null
+            results.push({ group: g, order: ord, fulfillment: myFul, invoice: inv })
+          }
+        } catch {
+          // ignore
+        }
+      }
+      setUserOrders(results)
+    } catch {
+      // fallback
+    } finally {
+      setIsOrdersLoading(false)
+    }
+  }
 
   const loadGroups = async () => {
     setIsLoading(true)
@@ -72,7 +103,9 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
   }
 
   useEffect(() => {
-    if (activeTab !== 'orders') {
+    if (activeTab === 'orders') {
+      loadOrdersData()
+    } else {
       loadGroups()
     }
   }, [activeTab, user?.neighborhood_id])
@@ -266,15 +299,31 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
 
         {/* Content based on Active Tab */}
         {activeTab === 'orders' ? (
-          <Card>
-            <CardContent className="p-12 text-center space-y-3">
-              <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto" />
-              <h3 className="text-base font-bold text-slate-900">Simulated Orders & Tracking</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Once an organizer selects a quotation and all members confirm their allocations, orders undergo simulated wholesale procurement and pickup distribution (Milestone 4 & 5).
-              </p>
-            </CardContent>
-          </Card>
+          isOrdersLoading ? (
+            <div className="text-center py-16 text-slate-400 text-xs">Loading orders & tracking...</div>
+          ) : userOrders.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center space-y-3">
+                <ShoppingBag className="w-12 h-12 text-slate-300 mx-auto" />
+                <h3 className="text-base font-bold text-slate-900">No Orders in Fulfillment Yet</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Once your group purchase order is locked and approved, your household payment receipts, pickup PIN code passes, and doorstep delivery trackers will appear here.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {userOrders.map((item) => (
+                <PickupPassCard
+                  key={item.order.id}
+                  fulfillment={item.fulfillment}
+                  groupOrderId={item.order.id}
+                  invoice={item.invoice}
+                  onRefresh={loadOrdersData}
+                />
+              ))}
+            </div>
+          )
         ) : isLoading ? (
           <div className="text-center py-16 text-slate-400 text-xs">
             Loading buying groups...

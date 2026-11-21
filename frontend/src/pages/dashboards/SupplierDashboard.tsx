@@ -18,7 +18,9 @@ import {
   BuyingGroup,
   DemandSnapshot,
   DemandSummaryResponse,
+  ProcurementOrder,
 } from '@/types'
+import { Truck, Check, PackageCheck } from 'lucide-react'
 import { api, ApiError } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
@@ -36,6 +38,8 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
   const [profile, setProfile] = useState<SupplierProfile | null>(null)
   const [offers, setOffers] = useState<SupplierProductOffer[]>([])
   const [quotingGroups, setQuotingGroups] = useState<BuyingGroup[]>([])
+  const [procurementOrders, setProcurementOrders] = useState<ProcurementOrder[]>([])
+  const [isUpdatingPo, setIsUpdatingPo] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   // RFQ Quotation Modal
@@ -79,6 +83,10 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
       // 3. Load groups in QUOTING or OPEN status with snapshots
       const grps = await api.getGroups()
       setQuotingGroups(grps)
+
+      // 4. Load assigned procurement orders
+      const pos = await api.getSupplierProcurementOrders()
+      setProcurementOrders(pos)
     } catch {
       // fallback
     } finally {
@@ -89,6 +97,19 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
   useEffect(() => {
     loadSupplierData()
   }, [])
+
+  const handleUpdatePoStatus = async (poId: string, newStatus: string) => {
+    try {
+      setIsUpdatingPo(poId)
+      await api.updateProcurementStatus(poId, { status: newStatus })
+      const pos = await api.getSupplierProcurementOrders()
+      setProcurementOrders(pos)
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update procurement order status')
+    } finally {
+      setIsUpdatingPo(null)
+    }
+  }
 
   const handleOpenQuoteModal = async (group: BuyingGroup) => {
     setQuoteError(null)
@@ -253,6 +274,90 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
           </CardContent>
         </Card>
       </div>
+
+      {/* Wholesale Purchase Orders (Milestone 5) */}
+      {procurementOrders.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-stone-900">Wholesale Purchase Orders (POs)</h3>
+              <p className="text-xs text-stone-500">
+                Official procurement orders placed by Platform Admins for fulfillment and hub delivery.
+              </p>
+            </div>
+            <Badge variant="brand">{procurementOrders.length} Assigned</Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {procurementOrders.map((po) => (
+              <Card key={po.id} className="p-5 border border-stone-200 space-y-3 bg-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-mono text-xs font-bold text-stone-900">{po.po_number}</span>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      Placed: {new Date(po.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      po.status === 'DELIVERED_TO_HUB'
+                        ? 'success'
+                        : po.status === 'DISPATCHED_TO_HUB'
+                        ? 'warning'
+                        : 'info'
+                    }
+                  >
+                    {po.status.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+
+                <div className="p-3 rounded-xl bg-stone-50 border border-stone-100 flex items-center justify-between text-xs">
+                  <span className="text-stone-600">Wholesale Order Value:</span>
+                  <span className="font-bold text-stone-900 text-sm">
+                    {formatCurrency(po.total_amount)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  {po.status === 'PLACED' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleUpdatePoStatus(po.id, 'CONFIRMED_BY_SUPPLIER')}
+                      disabled={isUpdatingPo === po.id}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                    >
+                      <Check className="w-3.5 h-3.5 mr-1" />
+                      Acknowledge PO
+                    </Button>
+                  )}
+                  {po.status === 'CONFIRMED_BY_SUPPLIER' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleUpdatePoStatus(po.id, 'DISPATCHED_TO_HUB')}
+                      disabled={isUpdatingPo === po.id}
+                      className="bg-sky-600 hover:bg-sky-700 text-white text-xs"
+                    >
+                      <Truck className="w-3.5 h-3.5 mr-1" />
+                      Dispatch to Hub
+                    </Button>
+                  )}
+                  {po.status === 'DISPATCHED_TO_HUB' && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleUpdatePoStatus(po.id, 'DELIVERED_TO_HUB')}
+                      disabled={isUpdatingPo === po.id}
+                      className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                    >
+                      <PackageCheck className="w-3.5 h-3.5 mr-1" />
+                      Mark Delivered to Hub
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Available RFQs / Demand Snapshots for Quotations */}
       <div className="space-y-4">

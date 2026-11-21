@@ -12,6 +12,11 @@ from app.api.v1.endpoints import (
     quotations,
     confirmations,
     audit,
+    payments,
+    procurement,
+    fulfillment,
+    notifications,
+    disputes,
 )
 
 api_router = APIRouter()
@@ -27,3 +32,8 @@ api_router.include_router(suppliers.router)
 api_router.include_router(quotations.router)
 api_router.include_router(confirmations.router)
 api_router.include_router(audit.router)
+api_router.include_router(payments.router)
+api_router.include_router(procurement.router)
+api_router.include_router(fulfillment.router)
+api_router.include_router(notifications.router)
+api_router.include_router(disputes.router)

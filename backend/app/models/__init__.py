@@ -39,6 +39,28 @@ from app.models.order import (
     GroupOrder,
 )
 from app.models.audit import AuditLog
+from app.models.payment import (
+    PaymentStatus,
+    PaymentMethod,
+    PaymentTransaction,
+)
+from app.models.procurement import (
+    ProcurementStatus,
+    ProcurementOrder,
+)
+from app.models.fulfillment import (
+    FulfillmentStatus,
+    MemberFulfillment,
+)
+from app.models.notification import (
+    NotificationType,
+    Notification,
+)
+from app.models.dispute import (
+    DisputeStatus,
+    DisputeCategory,
+    OrderDispute,
+)
 
 __all__ = [
     "Base",
@@ -71,4 +93,16 @@ __all__ = [
     "MemberConfirmation",
     "GroupOrder",
     "AuditLog",
+    "PaymentStatus",
+    "PaymentMethod",
+    "PaymentTransaction",
+    "ProcurementStatus",
+    "ProcurementOrder",
+    "FulfillmentStatus",
+    "MemberFulfillment",
+    "NotificationType",
+    "Notification",
+    "DisputeStatus",
+    "DisputeCategory",
+    "OrderDispute",
 ]

@@ -3,6 +3,7 @@ import { ShoppingBag, MapPin, User, LogOut, LayoutDashboard, ChevronDown } from 
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 interface NavbarProps {
   onOpenAuth: (mode: 'login' | 'register') => void
@@ -93,6 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {user ? (
               <div className="flex items-center gap-2">
+                <NotificationBell />
                 <Button
                   variant="primary"
                   size="sm"

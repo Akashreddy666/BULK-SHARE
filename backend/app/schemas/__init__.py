@@ -67,6 +67,31 @@ from app.schemas.order import (
     GroupOrderRead,
 )
 from app.schemas.audit import AuditLogRead
+from app.schemas.payment import (
+    PaymentCreateRequest,
+    PaymentTransactionRead,
+    HouseholdInvoiceItemRead,
+    HouseholdInvoiceRead,
+    GroupOrderPaymentSummaryRead,
+)
+from app.schemas.procurement import (
+    ProcurementCreateRequest,
+    ProcurementStatusUpdateRequest,
+    ProcurementOrderRead,
+)
+from app.schemas.fulfillment import (
+    MemberFulfillmentRead,
+    VerifyPickupRequest,
+    UpdateFulfillmentStatusRequest,
+)
+from app.schemas.notification import (
+    NotificationRead,
+)
+from app.schemas.dispute import (
+    DisputeCreateRequest,
+    DisputeResolveRequest,
+    OrderDisputeRead,
+)
 
 __all__ = [
     "HealthResponse",
@@ -127,4 +152,19 @@ __all__ = [
     "ConfirmationRoundRead",
     "GroupOrderRead",
     "AuditLogRead",
+    "PaymentCreateRequest",
+    "PaymentTransactionRead",
+    "HouseholdInvoiceItemRead",
+    "HouseholdInvoiceRead",
+    "GroupOrderPaymentSummaryRead",
+    "ProcurementCreateRequest",
+    "ProcurementStatusUpdateRequest",
+    "ProcurementOrderRead",
+    "MemberFulfillmentRead",
+    "VerifyPickupRequest",
+    "UpdateFulfillmentStatusRequest",
+    "NotificationRead",
+    "DisputeCreateRequest",
+    "DisputeResolveRequest",
+    "OrderDisputeRead",
 ]

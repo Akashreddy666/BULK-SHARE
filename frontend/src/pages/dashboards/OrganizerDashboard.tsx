@@ -32,6 +32,7 @@ import { DemandSummaryPanel } from '@/components/aggregation/DemandSummaryPanel'
 import { QuotationComparisonView } from '@/components/quotation/QuotationComparisonView'
 import { ConfirmationRoundPanel } from '@/components/confirmation/ConfirmationRoundPanel'
 import { LockedOrderCard } from '@/components/order/LockedOrderCard'
+import { HubPickupDesk } from '@/components/fulfillment/HubPickupDesk'
 
 interface OrganizerDashboardProps {
   onOpenDemoSwitcher: () => void
@@ -450,7 +451,10 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
           {isOrderLoading ? (
             <div className="p-10 text-center text-stone-400 text-xs">Loading locked order details...</div>
           ) : groupOrder ? (
-            <LockedOrderCard order={groupOrder} />
+            <div className="space-y-6">
+              <LockedOrderCard order={groupOrder} />
+              <HubPickupDesk groupOrderId={groupOrder.id} groupName={activeGroup?.name} />
+            </div>
           ) : (
             <Card className="p-8 text-center bg-stone-50 border border-stone-200">
               <h4 className="text-base font-bold text-stone-900">No Order Locked Yet</h4>

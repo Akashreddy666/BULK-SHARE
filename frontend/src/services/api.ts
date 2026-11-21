@@ -22,6 +22,14 @@ import {
   AuditLog,
   FulfillmentPreference,
   MemberConfirmationStatus,
+  HouseholdInvoice,
+  PaymentTransaction,
+  GroupOrderPaymentSummary,
+  ProcurementOrder,
+  MemberFulfillment,
+  Notification,
+  OrderDispute,
+  DisputeCategory,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
@@ -282,4 +290,96 @@ export const api = {
     request<GroupOrder | null>(`/groups/${groupId}/order`),
   getGroupAuditLogs: (groupId: string) =>
     request<AuditLog[]>(`/audit/groups/${groupId}`),
+
+  // Milestone 5: Simulated Payments
+  getHouseholdInvoice: (groupOrderId: string) =>
+    request<HouseholdInvoice>(`/orders/${groupOrderId}/invoice`),
+  simulatePayment: (
+    groupOrderId: string,
+    data: { payment_method: string; notes?: string }
+  ) =>
+    request<PaymentTransaction>(`/orders/${groupOrderId}/payments/simulate`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getPaymentSummary: (groupOrderId: string) =>
+    request<GroupOrderPaymentSummary>(`/orders/${groupOrderId}/payments/summary`),
+
+  // Milestone 5: Wholesale Procurement
+  adminPlaceProcurementOrder: (
+    groupOrderId: string,
+    data: { estimated_delivery_date?: string; notes?: string }
+  ) =>
+    request<ProcurementOrder>(`/orders/${groupOrderId}/procurement/place`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getOrderProcurement: (groupOrderId: string) =>
+    request<ProcurementOrder | null>(`/orders/${groupOrderId}/procurement`),
+  updateProcurementStatus: (
+    procurementId: string,
+    data: { status: string; notes?: string }
+  ) =>
+    request<ProcurementOrder>(`/procurement/${procurementId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  getSupplierProcurementOrders: () =>
+    request<ProcurementOrder[]>('/supplier/procurement-orders'),
+
+  // Milestone 5: Hub Pickup & Fulfillment
+  getOrderFulfillments: (groupOrderId: string) =>
+    request<MemberFulfillment[]>(`/orders/${groupOrderId}/fulfillments`),
+  verifyPickupCode: (groupOrderId: string, pickupCode: string) =>
+    request<MemberFulfillment>(`/orders/${groupOrderId}/fulfillments/verify-pickup`, {
+      method: 'POST',
+      body: JSON.stringify({ pickup_code: pickupCode }),
+    }),
+  updateDeliveryStatus: (
+    groupOrderId: string,
+    fulfillmentId: string,
+    data: { status: string; notes?: string }
+  ) =>
+    request<MemberFulfillment>(
+      `/orders/${groupOrderId}/fulfillments/${fulfillmentId}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }
+    ),
+
+  // Milestone 5: Notifications
+  getNotifications: () => request<Notification[]>('/notifications'),
+  markNotificationRead: (notificationId: string) =>
+    request<Notification>(`/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+    }),
+  markAllNotificationsRead: () =>
+    request<{ message: string }>('/notifications/mark-all-read', {
+      method: 'POST',
+    }),
+
+  // Milestone 5: Disputes
+  createDispute: (
+    groupOrderId: string,
+    data: { category: DisputeCategory; description: string }
+  ) =>
+    request<OrderDispute>(`/orders/${groupOrderId}/disputes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getOrderDisputes: (groupOrderId: string) =>
+    request<OrderDispute[]>(`/orders/${groupOrderId}/disputes`),
+  getAdminDisputes: (status?: string) => {
+    const url = status ? `/admin/disputes?status=${status}` : '/admin/disputes'
+    return request<OrderDispute[]>(url)
+  },
+  resolveDispute: (
+    disputeId: string,
+    data: { status: string; resolution_notes: string; refund_amount?: number }
+  ) =>
+    request<OrderDispute>(`/admin/disputes/${disputeId}/resolve`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 }
