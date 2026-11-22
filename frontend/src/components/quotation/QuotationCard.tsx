@@ -21,6 +21,8 @@ export const QuotationCard: React.FC<QuotationCardProps> = ({
   const [showItems, setShowItems] = useState(false)
 
   const isExpired = new Date(quotation.valid_until) < new Date()
+  const reference = quotation.total_retail_value
+  const savings = reference ? reference - quotation.total_quoted_price : undefined
 
   return (
     <Card
@@ -28,23 +30,13 @@ export const QuotationCard: React.FC<QuotationCardProps> = ({
         isLowestPrice ? 'border-2 border-emerald-500 shadow-md ring-2 ring-emerald-50' : 'border border-stone-200'
       }`}
     >
-      {isLowestPrice && (
-        <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[11px] font-bold px-3 py-1 rounded-bl-lg tracking-wide uppercase">
-          Best Value • Max Savings
-        </div>
-      )}
-
       <div className="p-5">
         {/* Header: Supplier info & Status */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-lg font-bold text-stone-900">
-                {quotation.supplier_name || 'Verified Wholesale Supplier'}
-              </h4>
-              <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium">
-                ✓ Verified
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="break-words text-lg font-bold text-brand-950">{quotation.supplier_name || 'Wholesale supplier'}</h4>
+              {isLowestPrice && <Badge variant="brand">Lowest quoted price</Badge>}
             </div>
             <p className="text-xs text-stone-500 mt-0.5">
               Valid until: <span className="font-semibold text-stone-700">{formatDate(quotation.valid_until)}</span>
@@ -68,25 +60,24 @@ export const QuotationCard: React.FC<QuotationCardProps> = ({
         </div>
 
         {/* Pricing Summary Grid */}
-        <div className="grid grid-cols-3 gap-3 my-4 p-3.5 bg-stone-50 rounded-xl border border-stone-200/70">
+        <div className="my-4 grid gap-3 rounded-xl border border-line bg-canvas p-4 sm:grid-cols-3">
           <div>
             <p className="text-[11px] font-medium text-stone-500 uppercase">Total Bid Amount</p>
             <p className="text-xl font-bold text-stone-900 mt-0.5">{formatCurrency(quotation.total_quoted_price)}</p>
           </div>
 
           <div>
-            <p className="text-[11px] font-medium text-stone-500 uppercase">Retail Shop Benchmark</p>
+            <p className="text-[11px] font-medium text-stone-500 uppercase">Sample retail reference</p>
             <p className="text-base font-semibold text-stone-500 line-through mt-0.5">
-              {formatCurrency(quotation.total_retail_value || 0)}
+              {reference ? formatCurrency(reference) : 'Unavailable'}
             </p>
           </div>
 
           <div>
-            <p className="text-[11px] font-medium text-emerald-700 uppercase">Group Savings</p>
+            <p className="text-[11px] font-medium text-emerald-700 uppercase">Savings vs. retail</p>
             <p className="text-xl font-bold text-emerald-600 mt-0.5">
-              {formatCurrency(quotation.savings_amount || 0)}
+              {savings === undefined ? 'Unavailable' : formatCurrency(savings)}
             </p>
-            <p className="text-[11px] text-emerald-700 font-semibold">{quotation.savings_percentage}% discount</p>
           </div>
         </div>
 
@@ -99,16 +90,17 @@ export const QuotationCard: React.FC<QuotationCardProps> = ({
         )}
 
         {/* Action and Line items expand */}
-        <div className="flex items-center justify-between pt-2 border-t border-stone-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
           <button
             type="button"
-            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+            className="flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-brand-800 hover:bg-brand-50"
+            aria-expanded={showItems}
             onClick={() => setShowItems(!showItems)}
           >
             {showItems ? 'Hide Line Items ▲' : `View ${quotation.items.length} Line Items ▼`}
           </button>
 
-          {isOrganizer && !isExpired && (
+          {isOrganizer && !isExpired && quotation.status === 'SUBMITTED' && onSelectQuotation && (
             <Button
               variant={isLowestPrice ? 'primary' : 'outline'}
               size="sm"
@@ -121,8 +113,8 @@ export const QuotationCard: React.FC<QuotationCardProps> = ({
 
         {/* Expanded Line Items Table */}
         {showItems && (
-          <div className="mt-4 pt-3 border-t border-stone-200 overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="table-scroll mt-4 border-t border-line pt-3" role="region" tabIndex={0} aria-label="Quotation line items">
+            <table className="w-full min-w-[32rem] text-left text-sm">
               <thead className="bg-stone-100/70 text-stone-600 font-semibold">
                 <tr>
                   <th className="p-2 rounded-l">Product SKU</th>

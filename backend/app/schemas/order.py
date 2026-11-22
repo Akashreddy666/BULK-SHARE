@@ -41,6 +41,7 @@ class HouseholdProposalItem(BaseModel):
     variant_name: str
     pack_count: int
     price_per_pack: float
+    reference_retail_per_pack: float
     line_total: float
 
 

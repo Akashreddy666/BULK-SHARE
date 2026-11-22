@@ -93,7 +93,8 @@ export function AdminDashboard() {
       label: 'Issue purchase order',
       run: async () => {
         const procurement = await api.adminPlaceProcurementOrder(record.order.id, { notes: 'Simulated procurement initiated by administrator.' })
-        setOrders((previous) => previous.map((entry) => entry.order.id === record.order.id ? { ...entry, procurement } : entry))
+        const fulfillments = await api.getOrderFulfillments(record.order.id)
+        setOrders((previous) => previous.map((entry) => entry.order.id === record.order.id ? { ...entry, procurement, fulfillments } : entry))
         notify(`Simulated purchase order ${procurement.po_number} issued.`)
       },
     })

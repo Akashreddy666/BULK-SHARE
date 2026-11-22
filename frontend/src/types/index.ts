@@ -331,6 +331,7 @@ export interface ConfirmationRound {
     variant_name: string
     pack_count: number
     price_per_pack: number
+    reference_retail_per_pack: number
     line_total: number
   }>
   confirmations: MemberConfirmation[]

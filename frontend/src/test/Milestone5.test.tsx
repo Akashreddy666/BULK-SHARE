@@ -101,7 +101,7 @@ describe('Milestone 5 Frontend Components', () => {
     })
 
     expect(screen.getByText(/Total Payable: ₹720.00/i)).toBeInTheDocument()
-    expect(screen.getByText(/You Save ₹180.00/i)).toBeInTheDocument()
+    expect(screen.getByText(/Savings vs. sample retail ₹180/i)).toBeInTheDocument()
     expect(screen.getByText('UPI Instant')).toBeInTheDocument()
 
     // Click pay
@@ -126,7 +126,7 @@ describe('Milestone 5 Frontend Components', () => {
 
     expect(screen.getByText('BS-4912')).toBeInTheDocument()
     expect(screen.getByText(/Ready for Hub Pickup/i)).toBeInTheDocument()
-    expect(screen.getByText(/Hub Location: Indiranagar Community Hall/i)).toBeInTheDocument()
+    expect(screen.getByText(/Example pickup hub · Indiranagar Community Hall/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Pay My Share/i })).toBeInTheDocument()
   })
 

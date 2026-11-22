@@ -384,7 +384,7 @@ export function OrganizerDashboard({ onOpenHousehold }: { onOpenHousehold: () =>
           <QuotationComparisonView
             quotations={quotations}
             isLoading={isQuotesLoading}
-            isOrganizer={true}
+            isOrganizer={activeGroup?.status === 'OPEN' || activeGroup?.status === 'QUOTING'}
             onSelectQuotation={handleSelectQuotation}
           />
         </div>

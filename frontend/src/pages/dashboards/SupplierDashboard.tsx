@@ -241,11 +241,11 @@ export function SupplierDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {procurementOrders.map((po) => (
               <Card key={po.id} className="p-5 border border-stone-200 space-y-3 bg-white">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <span className="font-mono text-xs font-bold text-stone-900">{po.po_number}</span>
+                    <span className="font-mono text-sm font-bold text-stone-900">{po.po_number}</span>
                     <p className="text-[11px] text-stone-500 mt-0.5">
-                      Placed: {new Date(po.created_at).toLocaleDateString()}
+                      Placed: {formatDate(po.created_at)}
                     </p>
                   </div>
                   <Badge

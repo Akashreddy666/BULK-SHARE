@@ -13,6 +13,7 @@ import { api } from '@/services/api'
 import { HouseholdInvoice } from '@/types'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 
 interface PaymentModalProps {
@@ -98,6 +99,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       setPaying(false)
     }
   }
+
+  const savings = invoice ? formatCurrency(invoice.subtotal_retail - invoice.final_payable) : 'Unavailable'
 
   if (!isOpen) return null
 
@@ -185,11 +188,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
 
                 {/* Total & Savings summary */}
-                <div className="border-t border-slate-200/80 pt-3 flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
                   <div>
                     <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
                       <TrendingDown className="w-3.5 h-3.5" />
-                      Saved ₹{invoice?.total_savings.toFixed(2)} vs Retail
+                      Savings vs. sample retail {savings}
                     </span>
                   </div>
                   <div className="text-right">
@@ -262,10 +265,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-2 border-t border-slate-200 font-bold text-slate-900 text-sm">
+                  <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-2 text-sm font-bold text-ink">
                     <span className="text-emerald-700 font-semibold flex items-center gap-1 text-xs">
                       <Sparkles className="w-3.5 h-3.5" />
-                      You Save ₹{invoice?.total_savings.toFixed(2)}
+                      Savings vs. sample retail {savings}
                     </span>
                     <span>Total Payable: ₹{invoice?.final_payable.toFixed(2)}</span>
                   </div>

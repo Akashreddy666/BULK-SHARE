@@ -39,7 +39,8 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
 
   const deliverySurcharge = fulfillment === 'HOME_DELIVERY' ? round.home_delivery_surcharge : 0
   const finalTotal = myConfirmation && deliverySurcharge !== undefined ? myConfirmation.total_household_cost + deliverySurcharge : undefined
-  const finalSavings = myConfirmation && deliverySurcharge !== undefined ? myConfirmation.total_household_savings - deliverySurcharge : undefined
+  const retailReference = round.household_items?.reduce((sum, item) => sum + item.pack_count * item.reference_retail_per_pack, 0)
+  const finalSavings = finalTotal !== undefined && retailReference ? retailReference - finalTotal : undefined
 
   const handleAction = async (decision: MemberConfirmationStatus) => {
     if (!myConfirmation) return

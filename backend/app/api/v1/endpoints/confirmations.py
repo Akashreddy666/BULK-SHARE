@@ -105,6 +105,7 @@ def _hydrate_round_read(round_record: ConfirmationRound, current_user: User, db:
                     variant_name=item.variant.display_name,
                     pack_count=item.pack_quantity,
                     price_per_pack=price,
+                    reference_retail_per_pack=item.variant.reference_retail_price,
                     line_total=round(price * item.pack_quantity, 2),
                 ))
 
