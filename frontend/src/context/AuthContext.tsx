@@ -59,14 +59,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth()
   }, [])
 
-  const loginWithPassword = async (email: string) => {
+  const loginWithPassword = async (email: string, password: string) => {
     setIsLoading(true)
     setError(null)
     try {
       if (isSupabaseConfigured && supabase) {
         const { data, error: sbError } = await supabase.auth.signInWithPassword({
           email,
-          password: 'Password123!', // or user provided
+          password,
         })
         if (sbError) throw sbError
         if (data.session?.access_token) {
