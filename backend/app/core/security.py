@@ -58,17 +58,9 @@ def decode_token_payload(token: str) -> dict:
                 token,
                 settings.DEMO_JWT_SECRET,
                 algorithms=["HS256"],
+                issuer="bulk-share-demo",
             )
         except jwt.PyJWTError:
-            pass
-
-    # 3. Unverified fallback decode in strict demo mode if needed for inspection
-    if settings.DEMO_MODE:
-        try:
-            unverified = jwt.decode(token, options={"verify_signature": False})
-            if "sub" in unverified:
-                return unverified
-        except Exception:
             pass
 
     raise HTTPException(
