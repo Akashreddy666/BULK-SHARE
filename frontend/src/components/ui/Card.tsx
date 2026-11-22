@@ -9,7 +9,7 @@ export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   return (
     <div
       className={cn(
-        'bg-white rounded-xl border border-slate-200/80 shadow-sm shadow-slate-200/40 overflow-hidden',
+        'min-w-0 rounded-panel border border-line bg-white shadow-panel',
         className
       )}
       {...props}
@@ -24,7 +24,7 @@ export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   children,
   ...props
 }) => {
-  return <div className={cn('p-5 border-b border-slate-100', className)} {...props}>{children}</div>
+  return <div className={cn('p-4 sm:p-5 border-b border-line', className)} {...props}>{children}</div>
 }
 
 export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
@@ -44,7 +44,7 @@ export const CardDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement
   children,
   ...props
 }) => {
-  return <p className={cn('text-sm text-slate-500 mt-1', className)} {...props}>{children}</p>
+  return <p className={cn('text-sm text-slate-600 mt-1', className)} {...props}>{children}</p>
 }
 
 export const CardContent: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
@@ -52,7 +52,7 @@ export const CardContent: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   children,
   ...props
 }) => {
-  return <div className={cn('p-5', className)} {...props}>{children}</div>
+  return <div className={cn('p-4 sm:p-5', className)} {...props}>{children}</div>
 }
 
 export const CardFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
@@ -60,5 +60,5 @@ export const CardFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   children,
   ...props
 }) => {
-  return <div className={cn('p-5 bg-slate-50/50 border-t border-slate-100', className)} {...props}>{children}</div>
+  return <div className={cn('rounded-b-panel p-4 sm:p-5 bg-canvas border-t border-line', className)} {...props}>{children}</div>
 }
