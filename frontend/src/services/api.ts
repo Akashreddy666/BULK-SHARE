@@ -75,7 +75,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       let detail = `Request failed with status ${res.status}`
       try {
         const errorJson = await res.json()
-        detail = errorJson.detail || detail
+        if (typeof errorJson.detail === 'string') {
+          detail = errorJson.detail
+        } else if (Array.isArray(errorJson.detail)) {
+          const messages = errorJson.detail.flatMap((entry: unknown) => {
+            if (typeof entry !== 'object' || entry === null || !('msg' in entry)) return []
+            return typeof entry.msg === 'string' ? [entry.msg] : []
+          })
+          if (messages.length) detail = messages.join('. ')
+        }
       } catch {
         // Fallback to text
       }
@@ -87,8 +95,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     return (await res.json()) as T
   } catch (err: unknown) {
     if (err instanceof ApiError) throw err
-    const message = err instanceof Error ? err.message : 'Network error connecting to BULK SHARE API'
-    throw new ApiError(message, 500)
+    throw new ApiError('Could not connect to BULK SHARE. Check your connection and try again.', 0)
   }
 }
 
@@ -199,6 +206,7 @@ export const api = {
     request<HouseholdSavingsResponse>(`/groups/${groupId}/savings`),
 
   // Milestone 3: Supplier Profiles & Product Offers
+  getSuppliers: () => request<SupplierProfile[]>('/suppliers'),
   getMySupplierProfile: () =>
     request<SupplierProfile>('/suppliers/me/profile'),
   createSupplierProfile: (data: Partial<SupplierProfile>) =>

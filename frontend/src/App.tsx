@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { DemoBanner } from '@/components/layout/DemoBanner'
 import { Navbar } from '@/components/layout/Navbar'
@@ -13,6 +14,7 @@ import { AdminDashboard } from '@/pages/dashboards/AdminDashboard'
 
 const AppContent: React.FC = () => {
   const { user } = useAuth()
+  const [customerWorkspace, setCustomerWorkspace] = useState<{ userId: string; organizer: boolean }>()
   const [currentView, setCurrentView] = useState<'landing' | 'dashboard'>('landing')
   const [navigation, setNavigation] = useState({ target: '', sequence: 0 })
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false)
@@ -60,16 +62,19 @@ const AppContent: React.FC = () => {
 
     // Role-based routing
     if (user.role === 'ADMIN') {
-      return <AdminDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+      return <AdminDashboard key={user.id} />
     }
     if (user.role === 'SUPPLIER') {
-      return <SupplierDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+      return <SupplierDashboard key={user.id} />
     }
-    // Check if organizer persona
-    if (user.email.includes('organizer')) {
-      return <OrganizerDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+    const useOrganizerWorkspace = customerWorkspace?.userId === user.id
+      ? customerWorkspace.organizer
+      : user.email === 'rahul.organizer@bulkshare.com'
+
+    if (useOrganizerWorkspace) {
+      return <OrganizerDashboard key={user.id} onOpenHousehold={() => setCustomerWorkspace({ userId: user.id, organizer: false })} />
     }
-    return <CustomerDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+    return <CustomerDashboard key={user.id} onOpenOrganizer={() => setCustomerWorkspace({ userId: user.id, organizer: true })} />
   }
 
   return (
@@ -119,7 +124,7 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <ToastProvider><AppContent /></ToastProvider>
     </AuthProvider>
   )
 }

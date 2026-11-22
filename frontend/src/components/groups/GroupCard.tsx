@@ -19,6 +19,7 @@ import { formatDate } from '@/lib/utils'
 interface GroupCardProps {
   group: BuyingGroup
   onSelect: (group: BuyingGroup) => void
+  isJoining?: boolean
   onJoin?: (group: BuyingGroup) => void
   onOpenMyList?: (group: BuyingGroup) => void
 }
@@ -27,6 +28,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
   group,
   onSelect,
   onJoin,
+  isJoining,
   onOpenMyList,
 }) => {
   const isOrganizer = group.is_organizer
@@ -157,6 +159,7 @@ export const GroupCard: React.FC<GroupCardProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onJoin?.(group)}
+            isLoading={isJoining}
             className="border-brand-600 text-brand-700 hover:bg-brand-50"
           >
             Join Group

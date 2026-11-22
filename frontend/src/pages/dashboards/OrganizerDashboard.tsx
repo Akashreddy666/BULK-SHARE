@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Users,
   Layers,
@@ -6,11 +6,16 @@ import {
   ShieldCheck,
   CheckCircle2,
   Clock,
-  Sparkles,
+  ShoppingBag,
+  Settings,
   Plus,
   Lock,
   Vote,
 } from 'lucide-react'
+import { Dashboard, DashboardHeader, DashboardNav, Metric, PanelError, PanelLoading } from '@/components/dashboard/Dashboard'
+import { ActionDialog, type PendingAction } from '@/components/ui/ActionDialog'
+import { GroupSettingsModal } from '@/components/groups/GroupSettingsModal'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import {
   BuyingGroup,
@@ -22,7 +27,6 @@ import {
 import { api } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { GroupCard } from '@/components/groups/GroupCard'
 import { CreateGroupModal } from '@/components/groups/CreateGroupModal'
 import { GroupDetailModal } from '@/components/groups/GroupDetailModal'
@@ -34,15 +38,33 @@ import { ConfirmationRoundPanel } from '@/components/confirmation/ConfirmationRo
 import { LockedOrderCard } from '@/components/order/LockedOrderCard'
 import { HubPickupDesk } from '@/components/fulfillment/HubPickupDesk'
 
-interface OrganizerDashboardProps {
-  onOpenDemoSwitcher: () => void
-}
+const sections = [
+  { id: 'groups', label: 'Overview & groups', icon: Users },
+  { id: 'demand', label: 'Demand & tiers', icon: Layers },
+  { id: 'quotations', label: 'Quotations', icon: FileCheck },
+  { id: 'confirmations', label: 'Confirmations', icon: Vote },
+  { id: 'order', label: 'Order & pickup', icon: Lock },
+] as const
 
-export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDemoSwitcher }) => {
+const lifecycle = [
+  { label: 'Collecting items', statuses: ['OPEN'] },
+  { label: 'Supplier quotes', statuses: ['CLOSED', 'QUOTING'] },
+  { label: 'Confirmations', statuses: ['CONFIRMING'] },
+  { label: 'Order locked', statuses: ['LOCKED', 'PROCUREMENT'] },
+  { label: 'Fulfillment', statuses: ['FULFILLMENT', 'COMPLETED'] },
+]
+
+export function OrganizerDashboard({ onOpenHousehold }: { onOpenHousehold: () => void }) {
   const { user } = useAuth()
+  const notify = useToast()
+  const [loadError, setLoadError] = useState('')
+  const [viewError, setViewError] = useState('')
+  const [retryView, setRetryView] = useState(0)
+  const [action, setAction] = useState<PendingAction | null>(null)
+  const [editingGroup, setEditingGroup] = useState<BuyingGroup | null>(null)
   const [organizedGroups, setOrganizedGroups] = useState<BuyingGroup[]>([])
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'groups' | 'demand' | 'quotations' | 'confirmations' | 'order'>('groups')
+  const [activeTab, setActiveTab] = useState<typeof sections[number]['id']>('groups')
   const [isLoading, setIsLoading] = useState(true)
 
   // Demand aggregation & quotations state for active group
@@ -70,6 +92,7 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
 
   const loadOrganizedGroups = async () => {
     setIsLoading(true)
+    setLoadError('')
     try {
       const data = await api.getGroups({ my_groups_only: true })
       const filtered = data.filter((g) => g.is_organizer)
@@ -78,7 +101,7 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
         setActiveGroupId(filtered[0].id)
       }
     } catch {
-      // fallback
+      setLoadError('Your organized groups could not be loaded.')
     } finally {
       setIsLoading(false)
     }
@@ -88,41 +111,43 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
     loadOrganizedGroups()
   }, [])
 
-  // Load relevant tab data whenever activeGroupId or activeTab changes
   useEffect(() => {
     if (!activeGroupId) return
+    let active = true
+    setViewError('')
 
     if (activeTab === 'demand') {
       setIsDemandLoading(true)
       setDemandError(null)
-      api
-        .getDemandSummary(activeGroupId)
-        .then((data) => setDemandSummary(data))
-        .catch((err) => setDemandError(err.message || 'Failed to load demand summary'))
-        .finally(() => setIsDemandLoading(false))
+      setDemandSummary(null)
+      api.getDemandSummary(activeGroupId)
+        .then((data) => { if (active) setDemandSummary(data) })
+        .catch((error) => { if (active) setDemandError(error.message || 'Could not load demand.') })
+        .finally(() => { if (active) setIsDemandLoading(false) })
     } else if (activeTab === 'quotations') {
       setIsQuotesLoading(true)
-      api
-        .getGroupQuotations(activeGroupId)
-        .then((data) => setQuotations(data))
-        .catch(() => setQuotations([]))
-        .finally(() => setIsQuotesLoading(false))
+      setQuotations([])
+      api.getGroupQuotations(activeGroupId)
+        .then((data) => { if (active) setQuotations(data) })
+        .catch(() => { if (active) setViewError('Supplier quotations could not be loaded.') })
+        .finally(() => { if (active) setIsQuotesLoading(false) })
     } else if (activeTab === 'confirmations') {
       setIsRoundLoading(true)
-      api
-        .getConfirmationRound(activeGroupId)
-        .then((data) => setConfirmationRound(data))
-        .catch(() => setConfirmationRound(null))
-        .finally(() => setIsRoundLoading(false))
+      setConfirmationRound(null)
+      api.getConfirmationRound(activeGroupId)
+        .then((data) => { if (active) setConfirmationRound(data) })
+        .catch(() => { if (active) setViewError('The confirmation round could not be loaded.') })
+        .finally(() => { if (active) setIsRoundLoading(false) })
     } else if (activeTab === 'order') {
       setIsOrderLoading(true)
-      api
-        .getGroupOrder(activeGroupId)
-        .then((data) => setGroupOrder(data))
-        .catch(() => setGroupOrder(null))
-        .finally(() => setIsOrderLoading(false))
+      setGroupOrder(null)
+      api.getGroupOrder(activeGroupId)
+        .then((data) => { if (active) setGroupOrder(data) })
+        .catch(() => { if (active) setViewError('The group order could not be loaded.') })
+        .finally(() => { if (active) setIsOrderLoading(false) })
     }
-  }, [activeGroupId, activeTab])
+    return () => { active = false }
+  }, [activeGroupId, activeTab, retryView])
 
   const handleGroupCreated = (newGroup: BuyingGroup) => {
     setOrganizedGroups((prev) => [newGroup, ...prev])
@@ -131,198 +156,129 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
     setIsDetailOpen(true)
   }
 
+  const updateStatus = (id: string, status: BuyingGroup['status']) => {
+    setOrganizedGroups((previous) => previous.map((group) => group.id === id ? { ...group, status } : group))
+  }
+
   const handleRequestQuotations = async () => {
     if (!activeGroupId) return
-    await api.triggerDemandSnapshot(activeGroupId)
-    const updatedSummary = await api.getDemandSummary(activeGroupId)
-    setDemandSummary(updatedSummary)
-    setOrganizedGroups((prev) =>
-      prev.map((g) => (g.id === activeGroupId ? { ...g, status: 'QUOTING' } : g))
-    )
-    setActiveTab('quotations')
+    setAction({
+      title: 'Publish group demand?',
+      description: 'This takes a snapshot of pooled pack quantities and opens the group to supplier quotations.',
+      label: 'Publish demand',
+      run: async () => {
+        await api.triggerDemandSnapshot(activeGroupId)
+        updateStatus(activeGroupId, 'QUOTING')
+        setActiveTab('quotations')
+        notify('Demand published for supplier quotations.')
+      },
+    })
   }
 
   const handleSelectQuotation = async (quote: SupplierQuotation) => {
     if (!activeGroupId) return
-    if (!window.confirm(`Select ${quote.supplier_name} as the supplier for this purchase? This will start Member Confirmation Round 1.`)) {
-      return
-    }
-
-    try {
-      const round = await api.selectQuotation(activeGroupId, {
-        quotation_id: quote.id,
-        deadline_hours: 48,
-        notes: `Selected quotation from ${quote.supplier_name || 'Wholesaler'}.`,
-      })
-      setConfirmationRound(round)
-      setOrganizedGroups((prev) =>
-        prev.map((g) => (g.id === activeGroupId ? { ...g, status: 'CONFIRMING' } : g))
-      )
-      setActiveTab('confirmations')
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to select quotation')
-    }
+    setAction({
+      title: 'Select this quotation?',
+      description: `Selecting ${quote.supplier_name || 'this supplier'} starts the first household confirmation round.`,
+      label: 'Select quotation',
+      run: async () => {
+        const round = await api.selectQuotation(activeGroupId, {
+          quotation_id: quote.id,
+          deadline_hours: 48,
+          notes: `Selected quotation from ${quote.supplier_name || 'Wholesaler'}.`,
+        })
+        setConfirmationRound(round)
+        updateStatus(activeGroupId, 'CONFIRMING')
+        setActiveTab('confirmations')
+        notify('Quotation selected. Households can now confirm.')
+      },
+    })
   }
 
   const handleLockOrder = async () => {
     if (!activeGroupId) return
-    if (!window.confirm('Lock this group order? Once locked, quantities and allocation values are frozen, and members cannot cancel without admin intervention.')) {
-      return
-    }
-
-    try {
-      const order = await api.lockGroupOrder(activeGroupId)
-      setGroupOrder(order)
-      setOrganizedGroups((prev) =>
-        prev.map((g) => (g.id === activeGroupId ? { ...g, status: 'LOCKED' } : g))
-      )
-      setActiveTab('order')
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to lock order')
-    }
+    setAction({
+      title: 'Lock this group order?',
+      description: 'Locking freezes the pack quantities and costs. Changes after locking require an administrator.',
+      label: 'Lock group order',
+      run: async () => {
+        const order = await api.lockGroupOrder(activeGroupId)
+        setGroupOrder(order)
+        updateStatus(activeGroupId, 'LOCKED')
+        setActiveTab('order')
+        notify('Group order locked.')
+      },
+    })
   }
 
   const handleRecalculate = async () => {
     if (!activeGroupId) return
-    if (!window.confirm('Trigger order recalculation? Rejecting members will be removed and Round 2 will open. Note: this is the final confirmation round allowed.')) {
-      return
-    }
-
-    try {
-      const round2 = await api.recalculateOrder(activeGroupId)
-      setConfirmationRound(round2)
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to recalculate order')
-    }
+    setAction({
+      title: 'Start the final confirmation round?',
+      description: 'The order will be recalculated without households that rejected the quotation. This is the final round.',
+      label: 'Recalculate order',
+      run: async () => {
+        const round = await api.recalculateOrder(activeGroupId)
+        setConfirmationRound(round)
+        if (round.status === 'FAILED') updateStatus(activeGroupId, 'CANCELLED')
+        notify('Order recalculation completed.')
+      },
+    })
   }
 
-  const activeGroup = organizedGroups.find((g) => g.id === activeGroupId) || organizedGroups[0]
+  const activeGroup = organizedGroups.find((group) => group.id === activeGroupId)
+  const currentStep = lifecycle.findIndex(({ statuses }) => statuses.includes(activeGroup?.status ?? ''))
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header Profile */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-stone-900">Group Organizer Console</h1>
-            <Badge variant="brand">Organizer Scope</Badge>
+    <Dashboard>
+      <DashboardHeader role="Neighborhood group organizer" title="Organize your buying groups" description={`Pool demand, compare supplier quotes and coordinate orders in ${user?.neighborhood?.name || 'your neighborhood'}.`} icon={Users}>
+        <Button variant="secondary" onClick={onOpenHousehold}><ShoppingBag aria-hidden="true" className="size-4" /> Household dashboard</Button>
+        <Button variant="outline" onClick={() => setIsCreateOpen(true)}><Plus aria-hidden="true" className="size-4" /> Create buying group</Button>
+      </DashboardHeader>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Metric label="Groups you organize" value={isLoading || loadError ? '—' : organizedGroups.length} icon={Users} />
+        <Metric label="Households in selected group" value={activeGroup?.members_count ?? '—'} icon={CheckCircle2} />
+        <Metric label="Selected group status" value={activeGroup ? activeGroup.status.toLowerCase().replace(/_/g, ' ') : '—'} icon={Clock} />
+      </div>
+
+      <div className="flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm leading-relaxed text-brand-900">
+        <ShieldCheck aria-hidden="true" className="size-5 shrink-0" />
+        <p>Group demand combines pack counts. Household grocery lists and delivery addresses stay private.</p>
+      </div>
+
+      {activeGroup && (
+        <div className="space-y-4 rounded-panel border border-line bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 basis-56">
+              <label htmlFor="active-organizer-group" className="mb-1.5 block text-sm font-bold">Selected group</label>
+              <select id="active-organizer-group" className="control w-full" value={activeGroupId ?? ''} onChange={(event) => setActiveGroupId(event.target.value)}>
+                {organizedGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+              </select>
+            </div>
+            {activeGroup.status === 'OPEN' && <Button variant="outline" onClick={() => setEditingGroup(activeGroup)}><Settings aria-hidden="true" className="size-4" /> Group settings</Button>}
           </div>
-          <p className="text-sm text-stone-500">
-            Welcome, <span className="font-semibold text-stone-800">{user?.full_name}</span>. Managing community bulk purchasing pools in {user?.neighborhood?.name || 'your neighborhood'}.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" onClick={onOpenDemoSwitcher}>
-            <Sparkles className="w-4 h-4 mr-1.5 text-amber-500" />
-            Switch Persona
-          </Button>
-          <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Start New Group
-          </Button>
-        </div>
-      </div>
-
-      {/* Privacy Notice (FR-LIST-04) */}
-      <div className="p-4 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs flex items-start gap-3">
-        <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold text-sm">Privacy-Preserving Aggregated Demand Only (FR-LIST-04)</p>
-          <p className="mt-0.5 text-teal-800 leading-relaxed">
-            As a neighborhood group organizer, you have administrative permission to manage group settings, generate invitation codes, and monitor aggregated grocery quantities. Individual household grocery lists and delivery addresses are kept strictly private and sealed.
-          </p>
-        </div>
-      </div>
-
-      {/* Group Navigation Tabs & Selector */}
-      {organizedGroups.length > 0 && (
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <span className="text-xs font-semibold text-stone-500 uppercase whitespace-nowrap">
-              Active Group:
-            </span>
-            <select
-              value={activeGroupId || ''}
-              onChange={(e) => setActiveGroupId(e.target.value)}
-              className="px-3 py-1.5 text-sm font-semibold text-stone-800 bg-stone-50 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full md:w-auto"
-            >
-              {organizedGroups.map((grp) => (
-                <option key={grp.id} value={grp.id}>
-                  {grp.name} ({grp.status})
-                </option>
+          {currentStep >= 0 && (
+            <ol aria-label="Group timeline" className="grid gap-2 sm:grid-cols-5">
+              {lifecycle.map(({ label }, index) => (
+                <li key={label} aria-current={index === currentStep ? 'step' : undefined} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm ${index === currentStep ? 'bg-brand-50 font-bold text-brand-950' : 'text-slate-600'}`}>
+                  {index < currentStep ? <CheckCircle2 aria-label="Complete" className="size-4 shrink-0 text-brand-700" /> : <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${index === currentStep ? 'bg-brand-700' : 'bg-line'}`} />}
+                  {label}
+                </li>
               ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1.5 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-stone-100 overflow-x-auto">
-            <button
-              type="button"
-              onClick={() => setActiveTab('groups')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
-                activeTab === 'groups'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:bg-stone-100'
-              }`}
-            >
-              Overview & Groups
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('demand')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                activeTab === 'demand'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:bg-stone-100'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              Demand & Tiers
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('quotations')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                activeTab === 'quotations'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:bg-stone-100'
-              }`}
-            >
-              <FileCheck className="w-3.5 h-3.5" />
-              Quotations
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('confirmations')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                activeTab === 'confirmations'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:bg-stone-100'
-              }`}
-            >
-              <Vote className="w-3.5 h-3.5" />
-              Confirmations (M4)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('order')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                activeTab === 'order'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:bg-stone-100'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5" />
-              Locked Order
-            </button>
+            </ol>
+          )}
+          <div className="border-t border-line pt-3">
+            <DashboardNav label="Organizer views" items={sections} value={activeTab} onChange={setActiveTab} />
           </div>
         </div>
       )}
 
+      {viewError && <PanelError message={viewError} onRetry={() => setRetryView((value) => value + 1)} />}
       {/* Tab 1: Overview & All Organized Groups */}
       {activeTab === 'groups' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-bold text-stone-900">My Organized Buying Groups</h3>
               <p className="text-xs text-stone-500">
@@ -336,9 +292,9 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
           </div>
 
           {isLoading ? (
-            <div className="text-center py-12 text-stone-400 text-xs">
-              Loading your organized groups...
-            </div>
+            <PanelLoading label="Loading organized groups" />
+          ) : loadError ? (
+            <PanelError message={loadError} onRetry={loadOrganizedGroups} />
           ) : organizedGroups.length === 0 ? (
             <Card>
               <CardContent className="p-10 text-center space-y-3">
@@ -403,7 +359,7 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
       )}
 
       {/* Tab 3: Wholesale Quotations */}
-      {activeTab === 'quotations' && (
+      {activeTab === 'quotations' && !viewError && (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -435,7 +391,7 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
       )}
 
       {/* Tab 4: Member Confirmations (Milestone 4) */}
-      {activeTab === 'confirmations' && (
+      {activeTab === 'confirmations' && !viewError && (
         <ConfirmationRoundPanel
           round={confirmationRound}
           isLoading={isRoundLoading}
@@ -446,7 +402,7 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
       )}
 
       {/* Tab 5: Locked Order */}
-      {activeTab === 'order' && (
+      {activeTab === 'order' && !viewError && (
         <div className="space-y-4">
           {isOrderLoading ? (
             <div className="p-10 text-center text-stone-400 text-xs">Loading locked order details...</div>
@@ -464,6 +420,15 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
             </Card>
           )}
         </div>
+      )}
+
+      <ActionDialog action={action} onClose={() => setAction(null)} />
+      {editingGroup && (
+        <GroupSettingsModal key={editingGroup.id} group={editingGroup} onClose={() => setEditingGroup(null)} onSave={(updated) => {
+          setOrganizedGroups((previous) => previous.map((group) => group.id === updated.id ? updated : group))
+          setEditingGroup(null)
+          notify('Group settings saved.')
+        }} />
       )}
 
       {/* Modals */}
@@ -514,6 +479,6 @@ export const OrganizerDashboard: React.FC<OrganizerDashboardProps> = ({ onOpenDe
           }}
         />
       )}
-    </div>
+    </Dashboard>
   )
 }

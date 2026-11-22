@@ -1,16 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import {
-  Store,
-  Layers,
-  FileText,
-  CheckCircle,
-  Clock,
-  Plus,
-  Sparkles,
-  TrendingUp,
-  Send,
-  Building,
-} from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Check, CheckCircle, Clock, FileText, PackageCheck, Plus, Send, Settings, Store, Truck } from 'lucide-react'
+import { Dashboard, DashboardHeader, DashboardNav, Metric, PanelError, PanelLoading } from '@/components/dashboard/Dashboard'
+import { SupplierOfferForm, SupplierProfileForm } from '@/components/dashboard/SupplierForms'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import {
   SupplierProfile,
@@ -19,8 +11,8 @@ import {
   DemandSnapshot,
   DemandSummaryResponse,
   ProcurementOrder,
+  SupplierQuotation,
 } from '@/types'
-import { Truck, Check, PackageCheck } from 'lucide-react'
 import { api, ApiError } from '@/services/api'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
@@ -29,15 +21,28 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
-interface SupplierDashboardProps {
-  onOpenDemoSwitcher: () => void
-}
+const sections = [
+  { id: 'requests', label: 'Quote requests', icon: FileText },
+  { id: 'history', label: 'Submitted quotes', icon: CheckCircle },
+  { id: 'offers', label: 'Product offers', icon: Store },
+  { id: 'orders', label: 'Purchase orders', icon: Truck },
+] as const
 
-export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemoSwitcher }) => {
+export function SupplierDashboard() {
   const { user } = useAuth()
+  const notify = useToast()
+  const [tab, setTab] = useState<typeof sections[number]['id']>('requests')
+  const [loadError, setLoadError] = useState('')
+  const [quoteHistory, setQuoteHistory] = useState<{ quote: SupplierQuotation; groupName: string }[]>([])
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const [historyRevision, setHistoryRevision] = useState(0)
+  const [isProfileOpen, setProfileOpen] = useState(false)
+  const [editingOffer, setEditingOffer] = useState<SupplierProductOffer | null | undefined>(undefined)
+  const [openingQuote, setOpeningQuote] = useState<string | null>(null)
+  const [groups, setGroups] = useState<BuyingGroup[]>([])
   const [profile, setProfile] = useState<SupplierProfile | null>(null)
   const [offers, setOffers] = useState<SupplierProductOffer[]>([])
-  const [quotingGroups, setQuotingGroups] = useState<BuyingGroup[]>([])
   const [procurementOrders, setProcurementOrders] = useState<ProcurementOrder[]>([])
   const [isUpdatingPo, setIsUpdatingPo] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -53,50 +58,53 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
   const [bidPrices, setBidPrices] = useState<Record<string, number>>({})
   const [quoteNotes, setQuoteNotes] = useState('')
   const [isSubmittingQuote, setIsSubmittingQuote] = useState(false)
-  const [quoteSuccessMsg, setQuoteSuccessMsg] = useState<string | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
+
+  const quotingGroups = groups.filter((group) => group.status === 'QUOTING' || group.status === 'OPEN')
 
   const loadSupplierData = async () => {
     setIsLoading(true)
+    setLoadError('')
     try {
-      // 1. Load or initialize profile
-      try {
-        const prof = await api.getMySupplierProfile()
-        setProfile(prof)
-      } catch (err: unknown) {
-        if (err instanceof ApiError && err.status === 404) {
-          // Auto create profile for demo supplier
-          const newProf = await api.createSupplierProfile({
-            company_name: user?.full_name || 'Kisan Wholesale Supplies',
-            city: 'Bengaluru',
-            phone: user?.phone || '+91 98765 43212',
-            description: 'APMC licensed wholesale grains & staple groceries distributor.',
-          })
-          setProfile(newProf)
-        }
-      }
-
-      // 2. Load offers
-      const off = await api.getMySupplierOffers()
-      setOffers(off)
-
-      // 3. Load groups in QUOTING or OPEN status with snapshots
-      const grps = await api.getGroups()
-      setQuotingGroups(grps)
-
-      // 4. Load assigned procurement orders
-      const pos = await api.getSupplierProcurementOrders()
-      setProcurementOrders(pos)
+      const [savedProfile, buyingGroups, orders] = await Promise.all([
+        api.getMySupplierProfile().catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 404) return null
+          throw error
+        }),
+        api.getGroups(),
+        api.getSupplierProcurementOrders(),
+      ])
+      setProfile(savedProfile)
+      setGroups(buyingGroups)
+      setProcurementOrders(orders)
+      setOffers(savedProfile ? await api.getMySupplierOffers() : [])
     } catch {
-      // fallback
+      setLoadError('The supplier workspace could not be loaded.')
     } finally {
       setIsLoading(false)
     }
   }
 
+  useEffect(() => { void loadSupplierData() }, [])
+
   useEffect(() => {
-    loadSupplierData()
-  }, [])
+    if (tab !== 'history' || isLoading || loadError || !profile) return
+    let current = true
+    setIsHistoryLoading(true)
+    setHistoryError('')
+
+    Promise.all(groups.map(async (group) => {
+      const quotes = await api.getGroupQuotations(group.id)
+      return quotes.filter((quote) => quote.supplier_id === profile.id).map((quote) => ({ quote, groupName: group.name }))
+    }))
+      .then((entries) => {
+        if (current) setQuoteHistory(entries.flat().sort((left, right) => right.quote.created_at.localeCompare(left.quote.created_at)))
+      })
+      .catch(() => { if (current) setHistoryError('Your submitted quotations could not be loaded.') })
+      .finally(() => { if (current) setIsHistoryLoading(false) })
+
+    return () => { current = false }
+  }, [tab, groups, profile, isLoading, loadError, historyRevision])
 
   const handleUpdatePoStatus = async (poId: string, newStatus: string) => {
     try {
@@ -104,8 +112,9 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
       await api.updateProcurementStatus(poId, { status: newStatus })
       const pos = await api.getSupplierProcurementOrders()
       setProcurementOrders(pos)
-    } catch (err: any) {
-      alert(err?.message || 'Failed to update procurement order status')
+      notify('Purchase order status updated.')
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not update the purchase order.', 'error')
     } finally {
       setIsUpdatingPo(null)
     }
@@ -113,11 +122,11 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
 
   const handleOpenQuoteModal = async (group: BuyingGroup) => {
     setQuoteError(null)
-    setQuoteSuccessMsg(null)
+    setOpeningQuote(group.id)
     try {
       const snapshots = await api.getDemandSnapshots(group.id)
       if (snapshots.length === 0) {
-        alert('This group has not published an active demand snapshot yet.')
+        notify('This group has not published a demand snapshot yet.', 'error')
         return
       }
       const latestSnapshot = snapshots[0]
@@ -130,7 +139,7 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
         initialBids[it.variant_id] = defaultRate
       })
       setBidPrices(initialBids)
-      setQuoteNotes('Stock verified at Yeshwanthpur APMC Hub. Sealed manufacturer packs with batch test certificates.')
+      setQuoteNotes('')
 
       setQuotingSnapshot({
         groupId: group.id,
@@ -140,7 +149,9 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
       })
       setIsQuoteModalOpen(true)
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to load group demand snapshot')
+      notify(err instanceof Error ? err.message : 'Could not load the demand snapshot.', 'error')
+    } finally {
+      setOpeningQuote(null)
     }
   }
 
@@ -148,13 +159,17 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
     if (!quotingSnapshot) return
     setIsSubmittingQuote(true)
     setQuoteError(null)
-    setQuoteSuccessMsg(null)
 
     try {
       const itemsPayload = Object.entries(bidPrices).map(([variant_id, price]) => ({
         variant_id,
         quoted_price_per_pack: Number(price),
       }))
+
+      if (!itemsPayload.length || itemsPayload.some(({ quoted_price_per_pack }) => !Number.isFinite(quoted_price_per_pack) || quoted_price_per_pack < .01)) {
+        setQuoteError('Enter a positive per-pack price for every item.')
+        return
+      }
 
       const expiry = new Date()
       expiry.setDate(expiry.getDate() + 3)
@@ -166,11 +181,11 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
         items: itemsPayload,
       })
 
-      setQuoteSuccessMsg('Wholesale quotation submitted successfully! The group organizer can now evaluate your bid.')
-      setTimeout(() => {
-        setIsQuoteModalOpen(false)
-        setQuotingSnapshot(null)
-      }, 1800)
+      setIsQuoteModalOpen(false)
+      setQuotingSnapshot(null)
+      setTab('history')
+      setHistoryRevision((value) => value + 1)
+      notify('Quotation submitted to the group organizer.')
     } catch (err: unknown) {
       setQuoteError(err instanceof Error ? err.message : 'Failed to submit quotation')
     } finally {
@@ -185,98 +200,32 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
   }, 0) || 0
 
   const modalRetailTotal = quotingSnapshot?.summary.total_retail_value || 0
-  const modalSavings = Math.max(0, modalRetailTotal - modalTotal)
+  const modalSavings = modalRetailTotal - modalTotal
   const modalPct = modalRetailTotal > 0 ? Math.round((modalSavings / modalRetailTotal) * 100) : 0
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header Profile */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-stone-900">
-              {profile?.company_name || user?.full_name || 'Wholesale Supplier'}
-            </h1>
-            <Badge variant="success">
-              <CheckCircle className="w-3 h-3 mr-1" />
-              Verified APMC Wholesaler
-            </Badge>
-          </div>
-          <p className="text-sm text-stone-500">
-            Registered wholesale vendor supplying sealed staple packages to Bengaluru neighborhood buying groups.
-          </p>
-          {profile?.city && (
-            <p className="text-xs text-stone-400 font-medium">
-              Location: {profile.city} {profile.gstin ? `• GSTIN: ${profile.gstin}` : ''}
-            </p>
-          )}
-        </div>
+    <Dashboard>
+      <DashboardHeader role="Supplier workspace" title={profile?.company_name || user?.full_name || 'Wholesale supplier'} icon={Store}
+        description={profile ? <>{profile.city} · {profile.is_verified ? 'Verified in the demo' : 'Verification pending'}{profile.description && <span className="mt-1 block">{profile.description}</span>}</> : 'Set up your business profile, manage sealed-pack offers and review neighborhood demand.'}>
+        <Button variant="outline" onClick={() => setProfileOpen(true)} disabled={isLoading || !!loadError}>
+          <Settings aria-hidden="true" className="size-4" /> {profile ? 'Edit profile' : 'Set up profile'}
+        </Button>
+      </DashboardHeader>
 
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" onClick={onOpenDemoSwitcher}>
-            <Sparkles className="w-4 h-4 mr-1.5 text-amber-500" />
-            Switch Role Persona
-          </Button>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Metric label="Active product offers" value={isLoading || loadError ? '—' : offers.filter((offer) => offer.is_active).length} icon={Store} />
+        <Metric label="Open buying groups" value={isLoading || loadError ? '—' : quotingGroups.length} icon={Clock} />
+        <Metric label="Purchase orders" value={isLoading || loadError ? '—' : procurementOrders.length} icon={Truck} />
       </div>
 
-      {/* Metric Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
-              <Store className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-stone-500 font-medium">Catalog Offers</p>
-              <h3 className="text-xl font-bold text-stone-900 mt-0.5">{offers.length || 6} SKUs</h3>
-              <p className="text-[11px] text-sky-600 font-medium mt-0.5">Sealed retail packs</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
-              <Clock className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-stone-500 font-medium">Active Buying Pools</p>
-              <h3 className="text-xl font-bold text-amber-700 mt-0.5">{quotingGroups.length} Groups</h3>
-              <p className="text-[11px] text-amber-600 font-medium mt-0.5">Bengaluru layouts</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-              <CheckCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-stone-500 font-medium">Verified Status</p>
-              <h3 className="text-xl font-bold text-emerald-700 mt-0.5">Accredited</h3>
-              <p className="text-[11px] text-stone-500 mt-0.5">Simulated bulk supplier</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-stone-500 font-medium">Pricing Model</p>
-              <h3 className="text-xl font-bold text-purple-700 mt-0.5">Volume Tiers</h3>
-              <p className="text-[11px] text-stone-500 mt-0.5">Independent per-SKU rules</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="rounded-panel border border-line bg-white p-3">
+        <DashboardNav label="Supplier views" items={sections} value={tab} onChange={setTab} />
       </div>
+      {isLoading && <PanelLoading label="Loading supplier workspace" />}
+      {loadError && <PanelError message={loadError} onRetry={loadSupplierData} />}
 
       {/* Wholesale Purchase Orders (Milestone 5) */}
-      {procurementOrders.length > 0 && (
+      {!isLoading && !loadError && tab === 'orders' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -288,6 +237,7 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
             <Badge variant="brand">{procurementOrders.length} Assigned</Badge>
           </div>
 
+          {procurementOrders.length === 0 && <Card className="p-5 text-sm text-slate-600">Issued purchase orders will appear here.</Card>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {procurementOrders.map((po) => (
               <Card key={po.id} className="p-5 border border-stone-200 space-y-3 bg-white">
@@ -359,18 +309,20 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
         </div>
       )}
 
-      {/* Available RFQs / Demand Snapshots for Quotations */}
-      <div className="space-y-4">
+      {!isLoading && !loadError && tab === 'requests' && (
+      <section className="space-y-4" aria-label="Quotation requests">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-stone-900">Neighborhood Buying Groups & Quotation RFQs</h3>
+            <h3 className="text-lg font-bold text-stone-900">Neighborhood quote requests</h3>
             <p className="text-xs text-stone-500">
               Review pooled demand requirements and submit competitive wholesale bids directly to group organizers.
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {quotingGroups.length === 0 && <Card className="p-5 text-sm text-slate-600">No buying groups are currently accepting requests.</Card>}
+        {profile && !profile.is_verified && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Verification is required before you can submit quotations.</p>}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {quotingGroups.map((grp) => (
             <Card key={grp.id} className="p-5 border border-stone-200 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between gap-2">
@@ -389,7 +341,7 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
                 {grp.description || 'Staple grocery pool looking for certified bulk wholesale suppliers.'}
               </p>
 
-              <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
                 <span className="text-xs text-stone-500">
                   Target Deadline: <strong className="text-stone-700">{formatDate(grp.deadline)}</strong>
                 </span>
@@ -397,6 +349,8 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
                   size="sm"
                   variant="primary"
                   onClick={() => handleOpenQuoteModal(grp)}
+                  disabled={!profile?.is_verified || !!openingQuote}
+                  isLoading={openingQuote === grp.id}
                 >
                   <Send className="w-3.5 h-3.5 mr-1.5" />
                   Submit Quotation
@@ -405,84 +359,78 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
             </Card>
           ))}
         </div>
-      </div>
+      </section>
+      )}
 
-      {/* Wholesale Product Offerings & Price Tiers */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div>
-            <CardTitle className="text-base">Wholesale Catalog & Quantity Price Tiers</CardTitle>
-            <CardDescription className="text-xs">
-              Configured per sealed pack with independent quantity minimum thresholds (Milestone 3).
-            </CardDescription>
-          </div>
-          <Badge variant="brand">Sealed Packs Only</Badge>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-stone-200 text-stone-500 uppercase tracking-wider text-[11px]">
-                  <th className="pb-3">Product Name</th>
-                  <th className="pb-3">Pack Specification</th>
-                  <th className="pb-3">Retail Reference</th>
-                  <th className="pb-3">Tier 1 (5+ packs)</th>
-                  <th className="pb-3">Tier 2 (15+ packs)</th>
-                  <th className="pb-3">Tier 3 (30+ packs)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                <tr>
-                  <td className="py-3 font-semibold text-stone-900">Sona Masoori Rice (India Gate)</td>
-                  <td className="py-3 text-stone-600">5 kg sealed bag</td>
-                  <td className="py-3 text-stone-400 line-through">₹360 / pack</td>
-                  <td className="py-3 text-emerald-700 font-semibold">₹306 / pack (15% off)</td>
-                  <td className="py-3 text-emerald-700 font-bold">₹280 / pack (22% off)</td>
-                  <td className="py-3 text-emerald-800 font-extrabold">₹252 / pack (30% off)</td>
-                </tr>
-                <tr>
-                  <td className="py-3 font-semibold text-stone-900">Refined Sunflower Oil (Freedom)</td>
-                  <td className="py-3 text-stone-600">5 L sealed can</td>
-                  <td className="py-3 text-stone-400 line-through">₹720 / can</td>
-                  <td className="py-3 text-emerald-700 font-semibold">₹612 / can (15% off)</td>
-                  <td className="py-3 text-emerald-700 font-bold">₹561 / can (22% off)</td>
-                  <td className="py-3 text-emerald-800 font-extrabold">₹504 / can (30% off)</td>
-                </tr>
-                <tr>
-                  <td className="py-3 font-semibold text-stone-900">Premium Toor Dal (Tata Sampann)</td>
-                  <td className="py-3 text-stone-600">1 kg sealed pack</td>
-                  <td className="py-3 text-stone-400 line-through">₹175 / pack</td>
-                  <td className="py-3 text-emerald-700 font-semibold">₹148 / pack (15% off)</td>
-                  <td className="py-3 text-emerald-700 font-bold">₹136 / pack (22% off)</td>
-                  <td className="py-3 text-emerald-800 font-extrabold">₹122 / pack (30% off)</td>
-                </tr>
-                <tr>
-                  <td className="py-3 font-semibold text-stone-900">Refined Sugar (Madhur)</td>
-                  <td className="py-3 text-stone-600">1 kg sealed pouch</td>
-                  <td className="py-3 text-stone-400 line-through">₹50 / pack</td>
-                  <td className="py-3 text-emerald-700 font-semibold">₹42 / pack (15% off)</td>
-                  <td className="py-3 text-emerald-700 font-bold">₹39 / pack (22% off)</td>
-                  <td className="py-3 text-emerald-800 font-extrabold">₹35 / pack (30% off)</td>
-                </tr>
-                <tr>
-                  <td className="py-3 font-semibold text-stone-900">Whole Wheat Atta (Aashirvaad)</td>
-                  <td className="py-3 text-stone-600">5 kg sealed bag</td>
-                  <td className="py-3 text-stone-400 line-through">₹255 / pack</td>
-                  <td className="py-3 text-emerald-700 font-semibold">₹216 / pack (15% off)</td>
-                  <td className="py-3 text-emerald-700 font-bold">₹198 / pack (22% off)</td>
-                  <td className="py-3 text-emerald-800 font-extrabold">₹178 / pack (30% off)</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {!isLoading && !loadError && tab === 'history' && (
+        <Card>
+          <CardHeader><CardTitle>Submitted quotations</CardTitle><CardDescription>Review your own bids, totals and validity dates.</CardDescription></CardHeader>
+          <CardContent className="space-y-3">
+            {isHistoryLoading ? <PanelLoading label="Loading submitted quotations" count={2} /> : historyError ? <PanelError message={historyError} onRetry={() => setHistoryRevision((value) => value + 1)} /> : quoteHistory.length ? quoteHistory.map(({ quote, groupName }) => {
+              const status = quote.status === 'SUBMITTED' && new Date(quote.valid_until) < new Date() ? 'EXPIRED' : quote.status
+              return (
+                <div key={quote.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4 text-sm">
+                  <div><p className="font-bold">{groupName}</p><p className="mt-1 text-slate-600">Valid through {formatDate(quote.valid_until)}</p></div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <strong className="tabular-nums">{formatCurrency(quote.total_quoted_price)}</strong>
+                    <Badge variant={status === 'ACCEPTED' ? 'success' : 'neutral'}>{status.toLowerCase()}</Badge>
+                  </div>
+                </div>
+              )
+            }) : <p className="text-sm text-slate-600">Your submitted quotes will appear here.</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {!isLoading && !loadError && tab === 'offers' && (
+        <Card>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <div><CardTitle>Product offers &amp; quantity pricing</CardTitle><CardDescription>Prices and order minimums for your sealed-pack offers.</CardDescription></div>
+            {profile?.is_verified && <Button onClick={() => setEditingOffer(null)}><Plus aria-hidden="true" className="size-4" /> Add offer</Button>}
+          </CardHeader>
+          <CardContent>
+            {offers.length ? (
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="Your wholesale offers">
+                <table className="w-full min-w-[36rem] text-left text-sm">
+                  <thead><tr>{['Catalog pack', 'Price per pack', 'Order quantity', 'Status', 'Action'].map((label) => <th key={label} scope="col" className="px-3 py-3">{label}</th>)}</tr></thead>
+                  <tbody className="divide-y divide-line">
+                    {offers.map((offer) => (
+                      <tr key={offer.id}>
+                        <th scope="row" className="!bg-white px-3 py-3">{offer.variant_display_name || offer.variant_id}</th>
+                        <td className="px-3 py-3 font-bold tabular-nums">{formatCurrency(offer.offer_price_per_pack)}</td>
+                        <td className="px-3 py-3">{offer.max_order_packs === null || offer.max_order_packs === undefined ? `${offer.min_order_packs}+` : `${offer.min_order_packs}–${offer.max_order_packs}`} packs</td>
+                        <td className="px-3 py-3"><Badge variant={offer.is_active ? 'success' : 'neutral'}>{offer.is_active ? 'Active' : 'Inactive'}</Badge></td>
+                        <td className="px-3 py-3"><Button variant="ghost" size="sm" onClick={() => setEditingOffer(offer)} aria-label={`Edit ${offer.variant_display_name || offer.variant_id}`}>Edit</Button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="text-sm text-slate-600">{profile?.is_verified ? 'Add your first offer using a sealed pack from the catalog.' : 'Verified suppliers can publish wholesale product offers.'}</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {isProfileOpen && (
+        <SupplierProfileForm profile={profile} name={user?.full_name ?? ''} onClose={() => setProfileOpen(false)} onSave={(updated) => {
+          setProfile(updated)
+          setProfileOpen(false)
+          notify('Supplier profile saved.')
+        }} />
+      )}
+      {editingOffer !== undefined && (
+        <SupplierOfferForm offer={editingOffer} onClose={() => setEditingOffer(undefined)} onSave={(updated) => {
+          setOffers((previous) => previous.some((offer) => offer.id === updated.id) ? previous.map((offer) => offer.id === updated.id ? updated : offer) : [...previous, updated])
+          setEditingOffer(undefined)
+          notify('Wholesale offer saved.')
+        }} />
+      )}
 
       {/* Submit Quotation Modal */}
       {quotingSnapshot && (
         <Modal
           isOpen={isQuoteModalOpen}
-          onClose={() => setIsQuoteModalOpen(false)}
+          onClose={() => { if (!isSubmittingQuote) setIsQuoteModalOpen(false) }}
           title={`Submit Wholesale Quotation for ${quotingSnapshot.groupName}`}
           size="lg"
         >
@@ -492,14 +440,8 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
             </div>
 
             {quoteError && (
-              <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs">
+              <div role="alert" className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">
                 {quoteError}
-              </div>
-            )}
-
-            {quoteSuccessMsg && (
-              <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold">
-                {quoteSuccessMsg}
               </div>
             )}
 
@@ -508,7 +450,7 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
               <h4 className="text-sm font-bold text-stone-900">Specify Wholesale Bid per Sealed Pack</h4>
               <div className="border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100">
                 {quotingSnapshot.summary.items.map((it) => (
-                  <div key={it.variant_id} className="p-3 flex items-center justify-between gap-4 bg-white">
+                  <div key={it.variant_id} className="flex flex-wrap items-center justify-between gap-3 bg-white p-3">
                     <div>
                       <p className="text-xs font-bold text-stone-900">{it.variant_display_name}</p>
                       <p className="text-[11px] text-stone-500">
@@ -520,12 +462,14 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
                       <span className="text-xs font-semibold text-stone-600">₹</span>
                       <input
                         type="number"
-                        min="1"
+                        min=".01"
+                        step=".01"
+                        aria-label={`Price per pack for ${it.variant_display_name}`}
                         value={bidPrices[it.variant_id] || ''}
                         onChange={(e) =>
                           setBidPrices({ ...bidPrices, [it.variant_id]: Number(e.target.value) })
                         }
-                        className="w-24 px-2 py-1 text-sm font-bold text-emerald-800 border border-stone-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="control w-28 text-right font-bold"
                       />
                       <span className="text-xs text-stone-500">/ pack</span>
                     </div>
@@ -535,7 +479,7 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
             </div>
 
             {/* Live Pricing Totals Callout */}
-            <div className="p-4 bg-stone-50 rounded-xl border border-stone-200 grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="grid gap-3 rounded-xl border border-line bg-canvas p-4 text-sm sm:grid-cols-3">
               <div>
                 <span className="text-stone-500 block">Retail Benchmark</span>
                 <span className="font-bold text-stone-600 line-through">{formatCurrency(modalRetailTotal)}</span>
@@ -545,7 +489,7 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
                 <span className="font-bold text-stone-900 text-sm">{formatCurrency(modalTotal)}</span>
               </div>
               <div>
-                <span className="text-emerald-700 block font-semibold">Community Saves</span>
+                <span className="text-emerald-700 block font-semibold">Savings vs. retail</span>
                 <span className="font-bold text-emerald-700 text-sm">
                   {formatCurrency(modalSavings)} ({modalPct}%)
                 </span>
@@ -554,18 +498,20 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
 
             {/* Supplier Notes */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-stone-700">Dispatch & Delivery Terms Note</label>
+              <label htmlFor="supplier-quote-notes" className="text-sm font-semibold">Dispatch and delivery notes</label>
               <textarea
+                id="supplier-quote-notes"
                 rows={2}
+                maxLength={1000}
                 value={quoteNotes}
                 onChange={(e) => setQuoteNotes(e.target.value)}
                 placeholder="e.g. Dispatched from APMC yard, batch expiration 12 months, free delivery to society gate."
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="control w-full"
               />
             </div>
 
             {/* Action buttons */}
-            <div className="flex justify-end gap-3 pt-3 border-t border-stone-200">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
               <Button
                 variant="outline"
                 size="sm"
@@ -586,6 +532,6 @@ export const SupplierDashboard: React.FC<SupplierDashboardProps> = ({ onOpenDemo
           </div>
         </Modal>
       )}
-    </div>
+    </Dashboard>
   )
 }
