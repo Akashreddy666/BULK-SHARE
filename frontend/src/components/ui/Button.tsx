@@ -14,13 +14,14 @@ export const Button: React.FC<ButtonProps> = ({
   size = 'md',
   isLoading = false,
   disabled,
+  type = 'button',
   ...props
 }) => {
   const baseStyles =
-    'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 disabled:pointer-events-none rounded-lg'
+    'inline-flex items-center justify-center font-semibold transition active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 rounded-xl'
 
   const variants = {
-    primary: 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm shadow-brand-600/20 active:bg-brand-800',
+    primary: 'bg-brand-800 text-white hover:bg-brand-700 shadow-sm active:bg-brand-900',
     secondary: 'bg-brand-50 text-brand-800 hover:bg-brand-100 border border-brand-200 active:bg-brand-200',
     outline: 'border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 active:bg-slate-100',
     ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
@@ -29,19 +30,22 @@ export const Button: React.FC<ButtonProps> = ({
   }
 
   const sizes = {
-    sm: 'text-xs px-2.5 py-1.5 h-8 gap-1.5',
-    md: 'text-sm px-4 py-2 h-10 gap-2',
-    lg: 'text-base px-6 py-3 h-12 gap-2.5',
+    sm: 'text-sm px-3 py-1.5 min-h-10 gap-1.5',
+    md: 'text-sm px-4 py-2 min-h-11 gap-2',
+    lg: 'text-base px-6 py-3 min-h-12 gap-2.5',
   }
 
   return (
     <button
       className={cn(baseStyles, variants[variant], sizes[size], className)}
+      type={type}
+      aria-busy={isLoading || undefined}
       disabled={disabled || isLoading}
       {...props}
     >
       {isLoading && (
         <svg
+          aria-hidden="true"
           className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
           fill="none"
           viewBox="0 0 24 24"

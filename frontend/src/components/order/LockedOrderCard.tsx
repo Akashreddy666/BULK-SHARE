@@ -13,16 +13,24 @@ interface LockedOrderCardProps {
 export const LockedOrderCard: React.FC<LockedOrderCardProps> = ({ order }) => {
   const [showAllocations, setShowAllocations] = useState(false)
 
-  let parsedAllocations: any = null
-  try {
-    parsedAllocations = JSON.parse(order.order_allocations_data)
-  } catch {
-    // fallback
+  interface HouseholdAllocation {
+    user_name?: string
+    household_cost: number
+    household_savings: number
+    fulfillment_preference: string
   }
+
+  let parsedAllocations: { member_count?: number; members?: HouseholdAllocation[] } = {}
+  try {
+    parsedAllocations = JSON.parse(order.order_allocations_data) ?? {}
+  } catch {
+    // The aggregate order totals can still be displayed.
+  }
+  const ownAllocations = parsedAllocations.members ?? []
 
   return (
     <Card className="border-2 border-emerald-500 shadow-md overflow-hidden">
-      <div className="bg-gradient-to-r from-emerald-800 to-teal-800 text-white p-5">
+      <div className="bg-brand-900 text-white p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
@@ -53,7 +61,7 @@ export const LockedOrderCard: React.FC<LockedOrderCardProps> = ({ order }) => {
 
       <div className="p-5 space-y-4">
         {/* Metric summary */}
-        <div className="grid grid-cols-3 gap-3 text-center bg-stone-50 p-3.5 rounded-xl border border-stone-200">
+        <div className="grid gap-3 sm:grid-cols-3 text-center bg-stone-50 p-3.5 rounded-xl border border-stone-200">
           <div>
             <span className="text-[11px] font-semibold text-stone-500 uppercase block">Total Volume</span>
             <span className="text-xl font-bold text-stone-900 mt-0.5 block">{order.total_packs} packs</span>
@@ -86,32 +94,32 @@ export const LockedOrderCard: React.FC<LockedOrderCardProps> = ({ order }) => {
         </div>
 
         {/* Toggle Allocations */}
-        <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-          <Button
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
+          {ownAllocations.length > 0 && <Button
             variant="outline"
             size="sm"
+            aria-expanded={showAllocations}
             onClick={() => setShowAllocations(!showAllocations)}
           >
             {showAllocations ? 'Hide Frozen Allocation Details' : 'View Frozen Allocation Details'}
-          </Button>
+          </Button>}
 
           <span className="text-xs text-stone-500">
-            {parsedAllocations?.members?.length || 0} Confirmed Households
+            {parsedAllocations.member_count ?? ownAllocations.length} Confirmed Households
           </span>
         </div>
 
         {/* Allocation detail JSON breakdown */}
-        {showAllocations && parsedAllocations && (
+        {showAllocations && ownAllocations.length > 0 && (
           <div className="mt-3 pt-3 border-t border-stone-200 text-xs space-y-3">
-            <h5 className="font-bold text-stone-800">Confirmed Household Allocations</h5>
+            <h5 className="font-bold text-stone-800">Your household allocation</h5>
             <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
-              {parsedAllocations.members.map((m: any, idx: number) => (
+              {ownAllocations.map((m, idx) => (
                 <div key={idx} className="p-3 flex items-center justify-between bg-white text-xs">
                   <div>
                     <span className="font-bold text-stone-900 block">{m.user_name}</span>
                     <span className="text-[11px] text-stone-500">
                       Mode: <strong className="text-stone-700">{m.fulfillment_preference}</strong>
-                      {m.delivery_address && ` • ${m.delivery_address}`}
                     </span>
                   </div>
                   <div className="text-right">

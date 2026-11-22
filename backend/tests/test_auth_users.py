@@ -90,3 +90,55 @@ def test_invalid_signature_is_rejected_in_demo_mode(client: TestClient):
         headers={"Authorization": f"Bearer {forged_token}"},
     )
     assert response.status_code == 401
+
+
+def test_admin_account_status_requires_admin_and_records_reason(
+    client: TestClient, customer_auth_headers: dict, admin_auth_headers: dict, db_session
+):
+    import json
+
+    from sqlalchemy import select
+    from app.models.audit import AuditLog
+
+    endpoint = "/api/v1/admin/users/test-customer-01/status"
+    payload = {"is_active": False, "reason": "Demonstration account review"}
+    assert client.get("/api/v1/admin/users", headers=customer_auth_headers).status_code == 403
+    assert client.patch(endpoint, json=payload, headers=customer_auth_headers).status_code == 403
+
+    response = client.patch(endpoint, json=payload, headers=admin_auth_headers)
+    assert response.status_code == 200
+    assert response.json()["is_active"] is False
+    assert client.get("/api/v1/users/me", headers=customer_auth_headers).status_code == 403
+
+    audit_event = db_session.scalar(select(AuditLog).where(AuditLog.action == "ACCOUNT_STATUS_CHANGED"))
+    assert json.loads(audit_event.details)["reason"] == payload["reason"]
+
+    payload["is_active"] = True
+    assert client.patch(endpoint, json=payload, headers=admin_auth_headers).status_code == 200
+    assert client.get("/api/v1/users/me", headers=customer_auth_headers).status_code == 200
+
+
+def test_admin_supplier_review_is_audited(
+    client: TestClient, customer_auth_headers: dict, admin_auth_headers: dict, db_session
+):
+    import json
+
+    from sqlalchemy import select
+    from app.models.audit import AuditLog
+    from app.models.wholesale import SupplierProfile
+
+    supplier = SupplierProfile(
+        user_id="test-customer-01", company_name="Sample wholesale", city="Bengaluru", is_verified=False
+    )
+    db_session.add(supplier)
+    db_session.commit()
+    endpoint = f"/api/v1/admin/suppliers/{supplier.id}/review"
+    payload = {"is_verified": True, "reason": "Reviewed sample business profile"}
+    assert client.post(endpoint, json=payload, headers=customer_auth_headers).status_code == 403
+    assert client.post(endpoint, json={**payload, "reason": "  "}, headers=admin_auth_headers).status_code == 422
+
+    response = client.post(endpoint, json=payload, headers=admin_auth_headers)
+    assert response.status_code == 200
+    assert response.json()["is_verified"] is True
+    audit_event = db_session.scalar(select(AuditLog).where(AuditLog.action == "SUPPLIER_VERIFICATION_REVIEWED"))
+    assert json.loads(audit_event.details)["reason"] == payload["reason"]

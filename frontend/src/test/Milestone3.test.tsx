@@ -103,8 +103,8 @@ describe('Milestone 3 Frontend Components', () => {
     render(<QuotationCard quotation={mockQuotation} isLowestPrice={true} isOrganizer={true} />)
 
     expect(screen.getByText('Kisan Wholesale Agro Supplies')).toBeInTheDocument()
-    expect(screen.getByText(/Best Value • Max Savings/i)).toBeInTheDocument()
-    expect(screen.getByText(/23.6% discount/i)).toBeInTheDocument()
+    expect(screen.getByText(/Lowest quoted price/i)).toBeInTheDocument()
+    expect(screen.getByText('₹850')).toBeInTheDocument()
 
     // Line items toggle
     const toggleBtn = screen.getByText(/View 1 Line Items/i)
@@ -132,7 +132,7 @@ describe('Milestone 3 Frontend Components', () => {
       />
     )
 
-    expect(screen.getByText(/2 Wholesale Bids Received/i)).toBeInTheDocument()
+    expect(screen.getByText(/2 supplier quotations/i)).toBeInTheDocument()
     expect(screen.getByText('Kisan Wholesale Agro Supplies')).toBeInTheDocument()
     expect(screen.getByText('Bengaluru APMC Traders')).toBeInTheDocument()
   })

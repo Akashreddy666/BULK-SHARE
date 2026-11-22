@@ -49,6 +49,7 @@ def get_order_fulfillments(
             u_obj = db.execute(select(User).where(User.id == f.user_id)).scalar_one_or_none()
             user_cache[f.user_id] = u_obj
         u = user_cache[f.user_id]
+        view_private = is_admin or f.user_id == user.id
 
         results.append(
             MemberFulfillmentRead(
@@ -56,10 +57,10 @@ def get_order_fulfillments(
                 group_order_id=f.group_order_id,
                 user_id=f.user_id,
                 user_name=u.full_name if u else "Member",
-                user_phone=u.phone if u else None,
+                user_phone=u.phone if u and view_private else None,
                 fulfillment_type=f.fulfillment_type,
-                pickup_code=f.pickup_code,
-                delivery_address=f.delivery_address,
+                pickup_code=f.pickup_code if view_private else None,
+                delivery_address=f.delivery_address if view_private else None,
                 status=f.status,
                 dispatched_at=f.dispatched_at,
                 completed_at=f.completed_at,
@@ -72,6 +73,18 @@ def get_order_fulfillments(
     return results
 
 
+def _require_fulfillment_operator(db: Session, group_order_id: str, user: User) -> None:
+    if user.role == UserRole.ADMIN.value:
+        return
+    organizer_id = db.execute(
+        select(BuyingGroup.organizer_id)
+        .join(GroupOrder, GroupOrder.group_id == BuyingGroup.id)
+        .where(GroupOrder.id == group_order_id)
+    ).scalar_one_or_none()
+    if organizer_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the group organizer or an administrator can update fulfillment")
+
+
 def verify_pickup_code(
     db: Session,
     group_order_id: str,
@@ -79,6 +92,7 @@ def verify_pickup_code(
     verifier_user: User,
 ) -> MemberFulfillment:
     """Verify customer pickup code at the neighborhood hub and release sealed goods."""
+    _require_fulfillment_operator(db, group_order_id, verifier_user)
     clean_code = pickup_code.strip().upper()
 
     fulfillment = db.execute(
@@ -120,7 +134,6 @@ def verify_pickup_code(
         actor_user_id=verifier_user.id,
         actor_role=verifier_user.role,
         details={
-            "pickup_code": clean_code,
             "recipient_user_id": fulfillment.user_id,
             "group_order_id": group_order_id,
         },
@@ -147,6 +160,7 @@ def update_delivery_status(
     notes: Optional[str] = None,
 ) -> MemberFulfillment:
     """Mark home delivery completed."""
+    _require_fulfillment_operator(db, group_order_id, verifier_user)
     fulfillment = db.execute(
         select(MemberFulfillment).where(
             MemberFulfillment.id == fulfillment_id,

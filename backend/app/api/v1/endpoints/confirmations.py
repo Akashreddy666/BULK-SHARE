@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -7,6 +8,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User, UserRole
 from app.models.group import BuyingGroup
+from app.models.grocery_list import GroceryListItem
 from app.models.quotation import SupplierQuotation, QuotationItem
 from app.models.order import (
     ConfirmationRound,
@@ -20,6 +22,7 @@ from app.schemas.order import (
     MemberConfirmationRead,
     ConfirmationRoundRead,
     GroupOrderRead,
+    HouseholdProposalItem,
 )
 from app.services.confirmation import (
     start_confirmation_round,
@@ -27,12 +30,13 @@ from app.services.confirmation import (
     trigger_recalculation_round,
     lock_group_order,
 )
+from app.services.payment import HOME_DELIVERY_SURCHARGE
 from app.schemas.quotation import SupplierQuotationRead, QuotationItemRead
 
 router = APIRouter(tags=["Confirmations & Order Locking"])
 
 
-def _hydrate_round_read(round_record: ConfirmationRound, db: Session) -> ConfirmationRoundRead:
+def _hydrate_round_read(round_record: ConfirmationRound, current_user: User, db: Session) -> ConfirmationRoundRead:
     """Helper to enrich ConfirmationRoundRead with member progress and quotation."""
     confirmations = (
         db.execute(
@@ -50,10 +54,11 @@ def _hydrate_round_read(round_record: ConfirmationRound, db: Session) -> Confirm
     pending_count = 0
 
     for c in confirmations:
-        cr = MemberConfirmationRead.model_validate(c)
-        if c.user:
-            cr.user_name = c.user.full_name
-        conf_reads.append(cr)
+        if c.user_id == current_user.id or current_user.role == UserRole.ADMIN.value:
+            cr = MemberConfirmationRead.model_validate(c)
+            if c.user:
+                cr.user_name = c.user.full_name
+            conf_reads.append(cr)
 
         if c.status == "ACCEPTED":
             confirmed_count += 1
@@ -74,6 +79,7 @@ def _hydrate_round_read(round_record: ConfirmationRound, db: Session) -> Confirm
         confirmed_count=confirmed_count,
         rejected_count=rejected_count,
         pending_count=pending_count,
+        home_delivery_surcharge=HOME_DELIVERY_SURCHARGE,
         confirmations=conf_reads,
         created_at=round_record.created_at,
     )
@@ -85,6 +91,24 @@ def _hydrate_round_read(round_record: ConfirmationRound, db: Session) -> Confirm
         if q.supplier:
             q_read.supplier_name = q.supplier.company_name
         res.selected_quotation = q_read
+        if any(entry.user_id == current_user.id for entry in conf_reads):
+            rates = {item.variant_id: item.quoted_price_per_pack for item in q.items}
+            own_items = db.scalars(
+                select(GroceryListItem)
+                .where(GroceryListItem.group_id == round_record.group_id, GroceryListItem.user_id == current_user.id)
+                .options(joinedload(GroceryListItem.variant))
+            ).all()
+            for item in own_items:
+                price = rates.get(item.variant_id, item.variant.reference_retail_price)
+                res.household_items.append(HouseholdProposalItem(
+                    variant_id=item.variant_id,
+                    variant_name=item.variant.display_name,
+                    pack_count=item.pack_quantity,
+                    price_per_pack=price,
+                    reference_retail_per_pack=item.variant.reference_retail_price,
+                    line_total=round(price * item.pack_quantity, 2),
+                ))
+
 
     return res
 
@@ -107,7 +131,7 @@ def select_quotation_and_open_round(
         deadline_hours=payload.deadline_hours,
         notes=payload.notes,
     )
-    return _hydrate_round_read(round_record, db)
+    return _hydrate_round_read(round_record, current_user, db)
 
 
 @router.get("/groups/{group_id}/confirmation-round", response_model=Optional[ConfirmationRoundRead])
@@ -134,7 +158,7 @@ def get_active_confirmation_round(
     if not round_record:
         return None
 
-    return _hydrate_round_read(round_record, db)
+    return _hydrate_round_read(round_record, current_user, db)
 
 
 @router.post("/groups/{group_id}/confirmation-round/confirm", response_model=MemberConfirmationRead)
@@ -177,7 +201,7 @@ def recalculate_order(
         organizer_user_id=current_user.id,
         db=db,
     )
-    return _hydrate_round_read(round_2, db)
+    return _hydrate_round_read(round_2, current_user, db)
 
 
 @router.post("/groups/{group_id}/lock-order", response_model=GroupOrderRead)
@@ -195,10 +219,24 @@ def lock_order(
         locked_by_user_id=current_user.id,
         db=db,
     )
-    res = GroupOrderRead.model_validate(order)
+    return _read_group_order(order, current_user)
+
+
+def _read_group_order(order: GroupOrder, current_user: User) -> GroupOrderRead:
+    result = GroupOrderRead.model_validate(order)
     if order.quotation and order.quotation.supplier:
-        res.supplier_name = order.quotation.supplier.company_name
-    return res
+        result.supplier_name = order.quotation.supplier.company_name
+    if current_user.role == UserRole.ADMIN.value or not result.order_allocations_data:
+        return result
+
+    allocations = json.loads(result.order_allocations_data)
+    members = allocations.get("members", [])
+    result.order_allocations_data = json.dumps({
+        "member_count": len(members),
+        "members": [member for member in members if member.get("user_id") == current_user.id],
+        "items": [item for item in allocations.get("items", []) if item.get("user_id") == current_user.id],
+    })
+    return result
 
 
 @router.get("/groups/{group_id}/order", response_model=Optional[GroupOrderRead])
@@ -219,7 +257,4 @@ def get_group_order(
     if not order:
         return None
 
-    res = GroupOrderRead.model_validate(order)
-    if order.quotation and order.quotation.supplier:
-        res.supplier_name = order.quotation.supplier.company_name
-    return res
+    return _read_group_order(order, current_user)

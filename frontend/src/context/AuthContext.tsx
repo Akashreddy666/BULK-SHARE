@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean
   error: string | null
   demoMode: boolean
-  loginWithPassword: (email: string, password?: string) => Promise<void>
+  loginWithPassword: (email: string, password: string) => Promise<void>
   registerWithPassword: (email: string, password: string, fullName: string, role: UserRole) => Promise<void>
   loginWithGoogle: () => Promise<void>
   demoLogin: (role: UserRole, email?: string) => Promise<void>

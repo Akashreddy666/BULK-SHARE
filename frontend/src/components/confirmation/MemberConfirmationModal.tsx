@@ -37,7 +37,17 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
 
   if (!round) return null
 
+  const deliverySurcharge = fulfillment === 'HOME_DELIVERY' ? round.home_delivery_surcharge : 0
+  const finalTotal = myConfirmation && deliverySurcharge !== undefined ? myConfirmation.total_household_cost + deliverySurcharge : undefined
+  const retailReference = round.household_items?.reduce((sum, item) => sum + item.pack_count * item.reference_retail_per_pack, 0)
+  const finalSavings = finalTotal !== undefined && retailReference ? retailReference - finalTotal : undefined
+
   const handleAction = async (decision: MemberConfirmationStatus) => {
+    if (!myConfirmation) return
+    if (decision === 'ACCEPTED' && fulfillment === 'HOME_DELIVERY' && !address.trim()) {
+      setError('Enter a sample address for the simulated delivery.')
+      return
+    }
     setIsSubmitting(true)
     setError(null)
     setSuccessMsg(null)
@@ -46,7 +56,7 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
       await api.confirmMemberAllocation(groupId, {
         status: decision,
         fulfillment_preference: fulfillment,
-        delivery_address: fulfillment === 'HOME_DELIVERY' ? address : undefined,
+        delivery_address: decision === 'ACCEPTED' && fulfillment === 'HOME_DELIVERY' ? address.trim() : undefined,
         rejection_reason: decision === 'REJECTED' ? rejectionReason : undefined,
       })
 
@@ -72,7 +82,7 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => { if (!isSubmitting) onClose() }}
       title={`Review & Confirm Final Order: ${groupName}`}
       size="lg"
     >
@@ -80,7 +90,7 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
         {/* Banner Info */}
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-emerald-950 text-sm">
                 Round {round.round_number} Confirmation
               </span>
@@ -99,13 +109,13 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
         </div>
 
         {error && (
-          <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">
+          <div role="alert" className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">
             {error}
           </div>
         )}
 
         {successMsg && (
-          <div className="p-3 bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200">
+          <div role="status" className="p-3 bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200">
             {successMsg}
           </div>
         )}
@@ -119,89 +129,62 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
               Your current status: <strong>{myConfirmation?.status}</strong> on{' '}
               {myConfirmation?.confirmed_at ? formatDate(myConfirmation.confirmed_at) : 'recently'}
             </span>
-            <span className="text-[11px] font-normal underline cursor-pointer" onClick={() => setShowRejectInput(false)}>
-              Change Selection
-            </span>
+
           </div>
         )}
 
-        {/* Cost & Savings Summary Box */}
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 grid grid-cols-2 gap-4 text-center">
-          <div>
-            <span className="text-xs text-stone-500 font-medium block">Your Final Household Cost</span>
-            <span className="text-2xl font-black text-stone-900 mt-0.5 block">
-              {formatCurrency(myConfirmation?.total_household_cost || 0)}
-            </span>
-            <span className="text-[11px] text-stone-500">at selected wholesale rate</span>
-          </div>
-          <div>
-            <span className="text-xs text-emerald-700 font-medium block">Your Net Bulk Savings</span>
-            <span className="text-2xl font-black text-emerald-700 mt-0.5 block">
-              {formatCurrency(myConfirmation?.total_household_savings || 0)}
-            </span>
-            <span className="text-[11px] text-emerald-600 font-semibold">vs supermarket MRP</span>
-          </div>
-        </div>
+        {!myConfirmation && <p className="rounded-xl border border-line bg-canvas p-4 text-sm">There is no proposed allocation for your household in this round.</p>}
 
-        {/* Fulfillment Preference Radio Selector */}
-        <div className="space-y-3">
-          <label className="text-xs font-bold text-stone-900 block">Select Delivery / Pickup Mode</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div
-              className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                fulfillment === 'PICKUP'
-                  ? 'border-emerald-600 bg-emerald-50/40 ring-1 ring-emerald-500'
-                  : 'border-stone-200 hover:border-stone-300'
-              }`}
-              onClick={() => setFulfillment('PICKUP')}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-stone-900">Neighborhood Hub Pickup</span>
-                <span className="text-[11px] font-semibold text-emerald-700">FREE</span>
-              </div>
-              <p className="text-[11px] text-stone-500 mt-1">
-                Collect your sealed bags from the designated society coordinator hub.
-              </p>
-            </div>
+        {!!round.household_items?.length && (
+          <section aria-label="Your proposed sealed packs" className="overflow-hidden rounded-xl border border-line">
+            <h3 className="bg-canvas px-4 py-3 text-sm font-bold">Your proposed sealed packs</h3>
+            <ul className="divide-y divide-line">
+              {round.household_items.map((item) => (
+                <li key={item.variant_id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+                  <div><p className="font-semibold">{item.variant_name}</p><p className="text-slate-600">{item.pack_count} packs × {formatCurrency(item.price_per_pack)}</p></div>
+                  <span className="font-bold tabular-nums">{formatCurrency(item.line_total)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-            <div
-              className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                fulfillment === 'HOME_DELIVERY'
-                  ? 'border-emerald-600 bg-emerald-50/40 ring-1 ring-emerald-500'
-                  : 'border-stone-200 hover:border-stone-300'
-              }`}
-              onClick={() => setFulfillment('HOME_DELIVERY')}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-stone-900">Direct Home Delivery</span>
-                <span className="text-[11px] font-semibold text-stone-600">+ Nominal</span>
-              </div>
-              <p className="text-[11px] text-stone-500 mt-1">
-                Delivered right to your doorstep upon order arrival.
-              </p>
-            </div>
+        <fieldset className="space-y-3" disabled={isSubmitting || !!successMsg || !myConfirmation || round.status !== 'OPEN'}>
+          <legend className="text-sm font-bold text-brand-950">Pickup or delivery</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([
+              { value: 'PICKUP', label: 'Neighborhood Hub Pickup', fee: 'Free pickup', description: 'Collect your sealed packs from the designated hub.' },
+              { value: 'HOME_DELIVERY', label: 'Direct Home Delivery', fee: round.home_delivery_surcharge === undefined ? 'See invoice for fee' : formatCurrency(round.home_delivery_surcharge), description: 'Simulate delivery to a sample address.' },
+            ] as const).map((method) => (
+              <label key={method.value} className={`flex cursor-pointer items-start gap-2 rounded-xl border p-3 text-sm transition-colors ${fulfillment === method.value ? 'border-brand-600 bg-brand-50' : 'border-line hover:bg-canvas'}`}>
+                <input type="radio" name="order-fulfillment" value={method.value} checked={fulfillment === method.value} onChange={() => setFulfillment(method.value)} className="mt-1 size-4 shrink-0 accent-brand-700" />
+                <span><strong className="block">{method.label}</strong><span className="mt-1 block text-slate-700">{method.description} {method.fee}.</span></span>
+              </label>
+            ))}
           </div>
-
           {fulfillment === 'HOME_DELIVERY' && (
-            <div className="mt-2 space-y-1">
-              <label className="text-[11px] font-semibold text-stone-700">Doorstep Delivery Address</label>
-              <input
-                type="text"
-                placeholder="Apartment #, Wing, Street, Landmark"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <p className="text-[10px] text-stone-400">Kept private and sealed — visible only for final fulfillment delivery.</p>
+            <div>
+              <label htmlFor="confirmation-address" className="mb-1 block text-sm font-semibold">Sample delivery address</label>
+              <input id="confirmation-address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Apartment, street and neighborhood" className="control w-full" />
             </div>
           )}
-        </div>
+        </fieldset>
+
+        {myConfirmation && (
+          <dl className="space-y-2 rounded-xl border border-line bg-canvas p-4 text-sm">
+            <div className="flex justify-between gap-2"><dt>Household subtotal</dt><dd className="font-semibold tabular-nums">{formatCurrency(myConfirmation.total_household_cost)}</dd></div>
+            <div className="flex justify-between gap-2"><dt>Fulfillment fee</dt><dd className="font-semibold tabular-nums">{deliverySurcharge === undefined ? 'See invoice' : formatCurrency(deliverySurcharge)}</dd></div>
+            <div className="flex justify-between gap-2 border-t border-line pt-2 font-bold"><dt>Your final total</dt><dd className="tabular-nums">{finalTotal === undefined ? 'See invoice' : formatCurrency(finalTotal)}</dd></div>
+            {finalSavings !== undefined && <div className="flex justify-between gap-2"><dt>Savings after fulfillment</dt><dd className="font-semibold tabular-nums">{formatCurrency(finalSavings)}</dd></div>}
+          </dl>
+        )}
 
         {/* Rejection reason box */}
         {showRejectInput && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
-            <label className="text-xs font-bold text-red-900 block">Reason for Rejecting Quotation</label>
+            <label htmlFor="confirmation-rejection" className="block text-sm font-bold text-red-900">Reason for rejecting quotation</label>
             <textarea
+              id="confirmation-rejection"
               rows={2}
               placeholder="e.g. Quoted rate is higher than local retail deal, or brand preference changed."
               value={rejectionReason}
@@ -220,6 +203,7 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
             <button
               type="button"
               className="text-xs text-red-600 hover:text-red-700 font-medium"
+              disabled={!myConfirmation || round.status !== 'OPEN' || !!successMsg}
               onClick={() => setShowRejectInput(true)}
             >
               Have concerns? Reject this quotation
@@ -231,12 +215,13 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
               className="text-red-700 border-red-300 hover:bg-red-50"
               onClick={() => handleAction('REJECTED')}
               isLoading={isSubmitting}
+              disabled={!myConfirmation || round.status !== 'OPEN' || !!successMsg}
             >
               Confirm Rejection
             </Button>
           )}
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
               Close
             </Button>
@@ -245,6 +230,7 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
               size="sm"
               onClick={() => handleAction('ACCEPTED')}
               isLoading={isSubmitting}
+              disabled={!myConfirmation || round.status !== 'OPEN' || !!successMsg}
             >
               Accept & Confirm Order
             </Button>

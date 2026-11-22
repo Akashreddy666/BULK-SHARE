@@ -192,12 +192,13 @@ export const HouseholdGroceryListModal: React.FC<HouseholdGroceryListModalProps>
                     </p>
 
                     {/* Preference toggle */}
-                    <div className="flex items-center gap-2 pt-1 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1 text-sm">
                       <span className="text-slate-400">Brand Mode:</span>
                       <button
                         type="button"
+                        aria-pressed={item.brand_preference === 'EXACT'}
                         onClick={() => handleUpdatePreference(item, 'EXACT')}
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        className={`min-h-10 rounded-lg border px-2 text-sm font-semibold ${
                           item.brand_preference === 'EXACT'
                             ? 'bg-slate-100 border-slate-400 text-slate-800'
                             : 'border-slate-200 text-slate-400 hover:text-slate-700'
@@ -207,8 +208,9 @@ export const HouseholdGroceryListModal: React.FC<HouseholdGroceryListModalProps>
                       </button>
                       <button
                         type="button"
+                        aria-pressed={item.brand_preference === 'FLEXIBLE'}
                         onClick={() => handleUpdatePreference(item, 'FLEXIBLE')}
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border flex items-center gap-1 ${
+                        className={`min-h-10 rounded-lg border px-2 text-sm font-semibold flex items-center gap-1 ${
                           item.brand_preference === 'FLEXIBLE'
                             ? 'bg-emerald-50 border-emerald-500 text-emerald-800'
                             : 'border-slate-200 text-slate-400 hover:text-slate-700'
@@ -220,14 +222,15 @@ export const HouseholdGroceryListModal: React.FC<HouseholdGroceryListModalProps>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2 sm:border-0 sm:pt-0">
                     {/* Stepper */}
                     <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
                       <button
                         type="button"
+                        aria-label="Remove one pack"
                         onClick={() => handleUpdateQuantity(item, -1)}
                         disabled={item.pack_quantity <= 1}
-                        className="p-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="quantity-button"
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
@@ -236,8 +239,9 @@ export const HouseholdGroceryListModal: React.FC<HouseholdGroceryListModalProps>
                       </span>
                       <button
                         type="button"
+                        aria-label="Add one pack"
                         onClick={() => handleUpdateQuantity(item, 1)}
-                        className="p-1.5 text-slate-500 hover:text-slate-900"
+                        className="quantity-button"
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -255,8 +259,8 @@ export const HouseholdGroceryListModal: React.FC<HouseholdGroceryListModalProps>
                     <button
                       type="button"
                       onClick={() => handleDeleteItem(item.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                      title="Remove item"
+                      className="grid size-11 place-items-center rounded-lg text-slate-600 transition-colors hover:bg-red-50 hover:text-red-700"
+                      aria-label={`Remove ${variant?.brand || "item"} from grocery list`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

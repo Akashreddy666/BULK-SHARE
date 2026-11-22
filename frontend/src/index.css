@@ -1,19 +1,120 @@
+@font-face {
+  font-family: "DM Sans";
+  src: url("./assets/fonts/dm-sans.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "DM Serif Display";
+  src: url("./assets/fonts/dm-serif-display.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-800 antialiased selection:bg-brand-500 selection:text-white;
+    @apply bg-canvas text-ink antialiased selection:bg-brand-200 selection:text-brand-950;
+  }
+
+  :focus-visible {
+    outline: 2px solid #346640;
+    outline-offset: 3px;
+  }
+
+  [id] {
+    scroll-margin-top: 6rem;
+  }
+
+  body:has(dialog[open]) {
+    overflow: hidden;
+  }
+
+  dialog::backdrop {
+    background: rgb(18 39 28 / .55);
+    animation: fade-in .2s ease-out both;
+  }
+
+  summary {
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
   }
 }
 
-.gradient-hero {
-  background: radial-gradient(135% 120% at 50% 0%, rgba(209, 250, 229, 0.45) 0%, rgba(248, 250, 252, 0.8) 70%, #ffffff 100%);
+@layer components {
+  .site-container {
+    @apply mx-auto w-full max-w-[83rem] px-5 sm:px-8 lg:px-12;
+  }
+
+  .section-title {
+    @apply font-display text-3xl leading-[1.08] tracking-[-.025em] text-brand-950 sm:text-[2.65rem];
+  }
+
+  .quantity-button {
+    @apply grid size-11 place-items-center rounded-lg text-brand-800 transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .control {
+    @apply min-h-11 rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200;
+  }
+
+  .icon-tile {
+    @apply inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700;
+  }
+
+  .dialog-enter[open],
+  .page-enter {
+    animation: appear .24s ease-out both;
+  }
+
+  .progress-fill {
+    transform-origin: left;
+    animation: fill-progress .55s ease-out both;
+    transition: width .3s ease-out;
+  }
+
+  .table-scroll {
+    @apply overflow-x-auto rounded-xl;
+  }
+
+  .table-scroll th {
+    @apply bg-brand-50 text-brand-900;
+  }
+
+  .table-scroll tbody tr:hover {
+    @apply bg-canvas;
+  }
 }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+@keyframes appear {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fill-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

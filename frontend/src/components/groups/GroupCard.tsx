@@ -1,17 +1,6 @@
-import React from 'react'
-import {
-  Users,
-  Clock,
-  MapPin,
-  Lock,
-  Globe,
-  ArrowRight,
-  ShieldCheck,
-  UserCheck,
-  Sparkles,
-} from 'lucide-react'
-import { BuyingGroup } from '@/types'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
+import { Clock, Globe, Lock, MapPin, ShoppingBag, Users } from 'lucide-react'
+import type { BuyingGroup } from '@/types'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { formatDate } from '@/lib/utils'
@@ -19,150 +8,68 @@ import { formatDate } from '@/lib/utils'
 interface GroupCardProps {
   group: BuyingGroup
   onSelect: (group: BuyingGroup) => void
+  isJoining?: boolean
   onJoin?: (group: BuyingGroup) => void
   onOpenMyList?: (group: BuyingGroup) => void
 }
 
-export const GroupCard: React.FC<GroupCardProps> = ({
-  group,
-  onSelect,
-  onJoin,
-  onOpenMyList,
-}) => {
-  const isOrganizer = group.is_organizer
-  const isMember = group.is_member
-  const isPrivate = group.visibility === 'PRIVATE'
-  const progressPercent = Math.min(100, Math.round((group.members_count / group.min_members) * 100))
+const statuses = {
+  OPEN: { label: 'Open for items', color: 'success' },
+  CLOSED: { label: 'Closed to new items', color: 'neutral' },
+  QUOTING: { label: 'Comparing quotes', color: 'brand' },
+  CONFIRMING: { label: 'Member confirmation', color: 'warning' },
+  LOCKED: { label: 'Order locked', color: 'neutral' },
+  PROCUREMENT: { label: 'In procurement', color: 'info' },
+  FULFILLMENT: { label: 'In fulfillment', color: 'info' },
+  COMPLETED: { label: 'Completed', color: 'success' },
+  CANCELLED: { label: 'Cancelled', color: 'danger' },
+} as const
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return <Badge variant="success">OPEN FOR ITEMS</Badge>
-      case 'QUOTING':
-        return <Badge variant="brand">COMPARING QUOTES</Badge>
-      case 'CONFIRMING':
-        return <Badge variant="warning">MEMBER CONFIRMATION</Badge>
-      case 'LOCKED':
-        return <Badge variant="neutral">ORDER LOCKED</Badge>
-      default:
-        return <Badge variant="neutral">{status}</Badge>
-    }
-  }
+export function GroupCard({ group, onSelect, isJoining, onJoin, onOpenMyList }: GroupCardProps) {
+  const isPrivate = group.visibility === 'PRIVATE'
+  const VisibilityIcon = isPrivate ? Lock : Globe
+  const status = statuses[group.status]
+  const goal = Math.max(1, group.min_members)
+  const progress = Math.min(group.members_count, goal)
+  const remaining = Math.max(0, goal - group.members_count)
+  const canJoin = !group.is_member && !isPrivate && group.status === 'OPEN' && !!onJoin
 
   return (
-    <Card className="hover:border-slate-300 transition-all flex flex-col justify-between shadow-xs hover:shadow-md">
-      <div>
-        <CardHeader className="pb-3 border-b border-slate-100">
-          <div className="flex items-start justify-between gap-2">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {getStatusBadge(group.status)}
-                {isPrivate ? (
-                  <Badge variant="neutral" className="flex items-center gap-1 text-[10px] bg-slate-100 text-slate-700">
-                    <Lock className="w-3 h-3 text-slate-500" />
-                    Private Group
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="flex items-center gap-1 text-[10px] text-slate-600">
-                    <Globe className="w-3 h-3 text-slate-400" />
-                    Public Pool
-                  </Badge>
-                )}
-                {isOrganizer && (
-                  <Badge variant="brand" className="text-[10px]">
-                    <Sparkles className="w-3 h-3 mr-1" />
-                    You Organize
-                  </Badge>
-                )}
-                {isMember && !isOrganizer && (
-                  <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-300 bg-emerald-50">
-                    <UserCheck className="w-3 h-3 mr-1" />
-                    Joined Member
-                  </Badge>
-                )}
-              </div>
-              <CardTitle className="text-base text-slate-900 line-clamp-1">{group.name}</CardTitle>
-              {group.description && (
-                <CardDescription className="text-xs text-slate-500 line-clamp-2">
-                  {group.description}
-                </CardDescription>
-              )}
-            </div>
+    <Card className="flex h-full flex-col transition-shadow hover:shadow-md">
+      <CardHeader className="border-b-0 pb-0">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <Badge variant={status.color}>{status.label}</Badge>
+          <Badge variant="outline"><VisibilityIcon aria-hidden="true" className="size-3" />{isPrivate ? 'Private group' : 'Public pool'}</Badge>
+          {group.is_organizer ? <Badge variant="brand">You organize</Badge> : group.is_member && <Badge variant="neutral">Joined</Badge>}
+        </div>
+        <CardTitle className="break-words text-xl leading-tight tracking-tight">{group.name}</CardTitle>
+        {group.description && <CardDescription className="line-clamp-2">{group.description}</CardDescription>}
+      </CardHeader>
+      <CardContent className="flex-1 space-y-4">
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-700">
+          <span className="inline-flex items-center gap-1.5"><MapPin aria-hidden="true" className="size-4 shrink-0 text-brand-700" />{group.neighborhood?.name || 'Local neighborhood'}</span>
+          <span className="inline-flex items-center gap-1.5"><Clock aria-hidden="true" className="size-4 shrink-0 text-brand-700" />{group.status === 'OPEN' ? 'Closes' : 'Cutoff'} {formatDate(group.deadline)}</span>
+        </div>
 
-            <div className="text-right shrink-0">
-              <span className="text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md flex items-center gap-1">
-                <Users className="w-3.5 h-3.5 text-slate-500" />
-                {group.members_count}
-              </span>
-            </div>
+        <div className="space-y-2 rounded-xl border border-line bg-canvas p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <span className="inline-flex items-center gap-1.5 font-bold text-brand-900"><Users aria-hidden="true" className="size-4" /> Group participation</span>
+            <span className="tabular-nums text-slate-700">{group.members_count} / {group.min_members} Households</span>
           </div>
-        </CardHeader>
-
-        <CardContent className="pt-4 space-y-4 text-xs">
-          {/* Metadata Row */}
-          <div className="grid grid-cols-2 gap-2 text-slate-600">
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-              <span className="truncate">{group.neighborhood?.name || 'Local Neighborhood'}</span>
-            </div>
-            <div className="flex items-center gap-1.5 justify-end text-slate-500">
-              <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span className="truncate">Closes {formatDate(group.deadline)}</span>
-            </div>
+          <div role="progressbar" aria-label="Household participation goal" aria-valuemin={0} aria-valuemax={goal} aria-valuenow={progress} className="h-2 overflow-hidden rounded-full bg-brand-100">
+            <div className="progress-fill h-full rounded-full bg-brand-700" style={{ width: `${100 * progress / goal}%` }} />
           </div>
+          <p className="text-slate-600">{remaining === 0 ? 'Minimum threshold reached.' : `${remaining} more ${remaining === 1 ? 'household' : 'households'} to meet the group goal.`}</p>
+        </div>
+      </CardContent>
 
-          {/* Member Threshold Progress */}
-          <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
-            <div className="flex justify-between text-[11px] font-medium text-slate-600">
-              <span>Wholesale Activation Goal</span>
-              <span className="font-semibold text-slate-900">
-                {group.members_count} / {group.min_members} Households
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 rounded-full h-1.5">
-              <div
-                className={`h-1.5 rounded-full transition-all ${
-                  progressPercent >= 100 ? 'bg-emerald-600' : 'bg-brand-600'
-                }`}
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-slate-500">
-              {group.members_count >= group.min_members
-                ? '✓ Minimum threshold reached — wholesale quotations will be solicited.'
-                : `${group.min_members - group.members_count} more household(s) needed to unlock bulk pricing.`}
-            </p>
-          </div>
-        </CardContent>
-      </div>
-
-      {/* Action Footer */}
-      <div className="p-4 pt-0 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
-        <Button variant="ghost" size="sm" onClick={() => onSelect(group)}>
-          Group Details
-        </Button>
-
-        {isMember ? (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => onOpenMyList?.(group)}
-            className="flex items-center gap-1.5"
-          >
-            My Grocery List
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onJoin?.(group)}
-            className="border-brand-600 text-brand-700 hover:bg-brand-50"
-          >
-            Join Group
-          </Button>
+      <CardFooter className="flex flex-wrap items-center justify-between gap-2 bg-white">
+        <Button variant="ghost" size="sm" onClick={() => onSelect(group)}>Group details</Button>
+        {group.is_member && onOpenMyList && (
+          <Button size="sm" onClick={() => onOpenMyList(group)}><ShoppingBag aria-hidden="true" className="size-4" /> My grocery list</Button>
         )}
-      </div>
+        {canJoin && <Button size="sm" variant="secondary" onClick={() => onJoin(group)} isLoading={isJoining}>Join group</Button>}
+      </CardFooter>
     </Card>
   )
 }

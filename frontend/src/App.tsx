@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { lazy, Suspense, useEffect, useState } from 'react'
+import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { DemoBanner } from '@/components/layout/DemoBanner'
 import { Navbar } from '@/components/layout/Navbar'
@@ -6,14 +7,18 @@ import { Footer } from '@/components/layout/Footer'
 import { AuthModal } from '@/components/auth/AuthModal'
 import { DemoRoleSwitcher } from '@/components/auth/DemoRoleSwitcher'
 import { LandingPage } from '@/pages/LandingPage'
-import { CustomerDashboard } from '@/pages/dashboards/CustomerDashboard'
-import { OrganizerDashboard } from '@/pages/dashboards/OrganizerDashboard'
-import { SupplierDashboard } from '@/pages/dashboards/SupplierDashboard'
-import { AdminDashboard } from '@/pages/dashboards/AdminDashboard'
+import { PanelLoading } from '@/components/dashboard/Dashboard'
+
+const CustomerDashboard = lazy(() => import('@/pages/dashboards/CustomerDashboard').then((module) => ({ default: module.CustomerDashboard })))
+const OrganizerDashboard = lazy(() => import('@/pages/dashboards/OrganizerDashboard').then((module) => ({ default: module.OrganizerDashboard })))
+const SupplierDashboard = lazy(() => import('@/pages/dashboards/SupplierDashboard').then((module) => ({ default: module.SupplierDashboard })))
+const AdminDashboard = lazy(() => import('@/pages/dashboards/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
 
 const AppContent: React.FC = () => {
   const { user } = useAuth()
-  const [currentView, setCurrentView] = useState<string>('landing')
+  const [customerWorkspace, setCustomerWorkspace] = useState<{ userId: string; organizer: boolean }>()
+  const [currentView, setCurrentView] = useState<'landing' | 'dashboard'>('landing')
+  const [navigation, setNavigation] = useState({ target: '', sequence: 0 })
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false)
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>('login')
   const [demoSwitcherOpen, setDemoSwitcherOpen] = useState<boolean>(false)
@@ -27,10 +32,24 @@ const AppContent: React.FC = () => {
     setDemoSwitcherOpen(true)
   }
 
-  const handleNavigate = (view: string) => {
-    setCurrentView(view)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  const handleNavigate = (target: string) => {
+    setCurrentView(target === 'dashboard' ? 'dashboard' : 'landing')
+    setNavigation((previous) => ({ target, sequence: previous.sequence + 1 }))
   }
+
+  useEffect(() => {
+    if (!navigation.target) return
+    const element = document.getElementById(navigation.target)
+    if (element) {
+      element.focus({ preventScroll: true })
+      element.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+    } else {
+      window.scrollTo({ top: 0 })
+      document.getElementById('main-content')?.focus({ preventScroll: true })
+    }
+  }, [navigation])
+
+  const openDashboard = () => handleNavigate('dashboard')
 
   const renderDashboard = () => {
     if (!user) {
@@ -38,27 +57,31 @@ const AppContent: React.FC = () => {
         <LandingPage
           onOpenAuth={handleOpenAuth}
           onOpenDemoSwitcher={handleOpenDemoSwitcher}
-          onNavigateToDashboard={() => setCurrentView('dashboard')}
+          onNavigateToDashboard={openDashboard}
         />
       )
     }
 
     // Role-based routing
     if (user.role === 'ADMIN') {
-      return <AdminDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+      return <AdminDashboard key={user.id} />
     }
     if (user.role === 'SUPPLIER') {
-      return <SupplierDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+      return <SupplierDashboard key={user.id} />
     }
-    // Check if organizer persona
-    if (user.email.includes('organizer')) {
-      return <OrganizerDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+    const useOrganizerWorkspace = customerWorkspace?.userId === user.id
+      ? customerWorkspace.organizer
+      : user.email === 'rahul.organizer@bulkshare.com'
+
+    if (useOrganizerWorkspace) {
+      return <OrganizerDashboard key={user.id} onOpenHousehold={() => setCustomerWorkspace({ userId: user.id, organizer: false })} />
     }
-    return <CustomerDashboard onOpenDemoSwitcher={handleOpenDemoSwitcher} />
+    return <CustomerDashboard key={user.id} onOpenOrganizer={() => setCustomerWorkspace({ userId: user.id, organizer: true })} />
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900">
+    <div className="flex min-h-screen flex-col">
+      <a href="#main-content" className="sr-only z-50 rounded-xl bg-white px-4 py-3 font-bold text-ink focus:not-sr-only focus:absolute focus:left-4 focus:top-4">Skip to content</a>
       <DemoBanner />
       <Navbar
         onOpenAuth={handleOpenAuth}
@@ -67,19 +90,19 @@ const AppContent: React.FC = () => {
         onNavigate={handleNavigate}
       />
 
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
         {currentView === 'dashboard' ? (
-          renderDashboard()
+          <Suspense fallback={<div className="site-container py-10"><PanelLoading label="Loading your dashboard" /></div>}>{renderDashboard()}</Suspense>
         ) : (
           <LandingPage
             onOpenAuth={handleOpenAuth}
             onOpenDemoSwitcher={handleOpenDemoSwitcher}
-            onNavigateToDashboard={() => setCurrentView('dashboard')}
+            onNavigateToDashboard={user ? openDashboard : undefined}
           />
         )}
       </main>
 
-      <Footer />
+      <Footer onNavigate={handleNavigate} />
 
       {/* Auth Modal */}
       <AuthModal
@@ -87,14 +110,14 @@ const AppContent: React.FC = () => {
         onClose={() => setAuthModalOpen(false)}
         initialMode={authInitialMode}
         onOpenDemoSwitcher={handleOpenDemoSwitcher}
-        onSuccess={() => setCurrentView('dashboard')}
+        onSuccess={openDashboard}
       />
 
       {/* Evaluator Demo Role Switcher */}
       <DemoRoleSwitcher
         isOpen={demoSwitcherOpen}
         onClose={() => setDemoSwitcherOpen(false)}
-        onNavigateToDashboard={() => setCurrentView('dashboard')}
+        onNavigateToDashboard={openDashboard}
       />
     </div>
   )
@@ -103,7 +126,7 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <ToastProvider><AppContent /></ToastProvider>
     </AuthProvider>
   )
 }

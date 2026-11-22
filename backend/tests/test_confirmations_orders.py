@@ -1,3 +1,4 @@
+import json
 import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
@@ -325,7 +326,11 @@ def test_order_locking_and_freezing_allocations(setup_m4_data):
     assert order_data["total_packs"] == 5
     assert order_data["total_wholesale_amount"] == 1800.0  # 5 * 360
     assert order_data["total_savings_amount"] == 450.0  # 5 * 90
-    assert "order_allocations_data" in order_data
+    snapshot = json.loads(order_data["order_allocations_data"])
+    assert snapshot["member_count"] == 2
+    assert all(item["user_id"] == data["org"].id for item in snapshot["items"])
+    assert all(member["user_id"] == data["org"].id for member in snapshot["members"])
+    assert "Flat 302" not in order_data["order_allocations_data"]
 
     # Verify group status is LOCKED
     grp_res = client.get(

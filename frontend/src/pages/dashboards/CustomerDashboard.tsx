@@ -1,24 +1,12 @@
-import React, { useState, useEffect } from 'react'
-import {
-  Users,
-  TrendingDown,
-  ShoppingBag,
-  Clock,
-  Plus,
-  KeyRound,
-  MapPin,
-  Sparkles,
-  Search,
-  Filter,
-  ShieldCheck,
-  CheckCircle2,
-} from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CircleDollarSign, ClipboardList, Clock, KeyRound, MapPin, Plus, Search, ShoppingBag, Users } from 'lucide-react'
+import { Dashboard, DashboardHeader, DashboardNav, Metric, PanelError, PanelLoading } from '@/components/dashboard/Dashboard'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { BuyingGroup, Neighborhood, ConfirmationRound, GroupOrder, MemberFulfillment, HouseholdInvoice } from '@/types'
-import { api } from '@/services/api'
+import { BuyingGroup, ConfirmationRound, GroupOrder, MemberFulfillment, HouseholdInvoice, HouseholdSavingsResponse } from '@/types'
+import { api, ApiError } from '@/services/api'
 import { Button } from '@/components/ui/Button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { Card, CardContent } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 
 import { GroupCard } from '@/components/groups/GroupCard'
@@ -31,16 +19,30 @@ import { HouseholdSavingsModal } from '@/components/savings/HouseholdSavingsModa
 import { MemberConfirmationModal } from '@/components/confirmation/MemberConfirmationModal'
 import { PickupPassCard } from '@/components/fulfillment/PickupPassCard'
 
-interface CustomerDashboardProps {
-  onOpenDemoSwitcher: () => void
-}
+const sections = [
+  { id: 'my_groups', label: 'My buying groups', icon: Users },
+  { id: 'explore', label: 'Nearby groups', icon: MapPin },
+  { id: 'orders', label: 'Orders & tracking', icon: Clock },
+] as const
 
-export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemoSwitcher }) => {
+const orderedStatuses = ['LOCKED', 'PROCUREMENT', 'FULFILLMENT', 'COMPLETED']
+
+type CustomerSection = typeof sections[number]['id']
+
+export function CustomerDashboard({ onOpenOrganizer }: { onOpenOrganizer: () => void }) {
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState<'my_groups' | 'explore' | 'orders'>('my_groups')
+  const notify = useToast()
+  const [activeTab, setActiveTab] = useState<CustomerSection>('my_groups')
   const [groups, setGroups] = useState<BuyingGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [groupError, setGroupError] = useState('')
+  const [orderError, setOrderError] = useState('')
+  const [savings, setSavings] = useState<HouseholdSavingsResponse[]>([])
+  const [savingsPending, setSavingsPending] = useState(true)
+  const [savingsRevision, setSavingsRevision] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
+  const [openOnly, setOpenOnly] = useState(false)
+  const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null)
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -63,25 +65,30 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
 
   const loadOrdersData = async () => {
     setIsOrdersLoading(true)
+    setOrderError('')
     try {
-      const myGroups = await api.getGroups({ my_groups_only: true })
-      const results = []
-      for (const g of myGroups) {
+      const myOrders = await Promise.all(groups.filter((group) => group.is_member && orderedStatuses.includes(group.status)).map(async (group) => {
+        const order = await api.getGroupOrder(group.id)
+        if (!order) return null
+
         try {
-          const ord = await api.getGroupOrder(g.id)
-          if (ord) {
-            const inv = await api.getHouseholdInvoice(ord.id).catch(() => null)
-            const fuls = await api.getOrderFulfillments(ord.id).catch(() => [])
-            const myFul = fuls.length > 0 ? fuls[0] : null
-            results.push({ group: g, order: ord, fulfillment: myFul, invoice: inv })
-          }
-        } catch {
-          // ignore
+          const [invoice, fulfillments] = await Promise.all([
+            api.getHouseholdInvoice(order.id),
+            api.getOrderFulfillments(order.id).catch((error: unknown) => {
+              if (error instanceof ApiError && error.status === 404) return []
+              throw error
+            }),
+          ])
+          const fulfillment = fulfillments.find((entry) => entry.user_id === user?.id)
+          return { group, order, invoice, fulfillment }
+        } catch (error) {
+          if (error instanceof ApiError && [403, 404].includes(error.status)) return null
+          throw error
         }
-      }
-      setUserOrders(results)
+      }))
+      setUserOrders(myOrders.filter((entry) => entry !== null))
     } catch {
-      // fallback
+      setOrderError('Your orders could not be loaded.')
     } finally {
       setIsOrdersLoading(false)
     }
@@ -89,35 +96,54 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
 
   const loadGroups = async () => {
     setIsLoading(true)
+    setGroupError('')
     try {
-      const data = await api.getGroups({
-        my_groups_only: activeTab === 'my_groups',
-        neighborhood_id: activeTab === 'explore' && user?.neighborhood_id ? user.neighborhood_id : undefined,
-      })
+      const data = await api.getGroups()
       setGroups(data)
     } catch {
-      // fallback
+      setGroupError('Your buying groups could not be loaded.')
     } finally {
       setIsLoading(false)
     }
   }
 
+  useEffect(() => { void loadGroups() }, [])
+
   useEffect(() => {
-    if (activeTab === 'orders') {
-      loadOrdersData()
-    } else {
-      loadGroups()
-    }
-  }, [activeTab, user?.neighborhood_id])
+    if (activeTab === 'orders' && !isLoading && !groupError) void loadOrdersData()
+  }, [activeTab, groups, isLoading, groupError])
+
+  useEffect(() => {
+    if (isLoading || groupError) return
+    let active = true
+    setSavingsPending(true)
+    const activeGroups = groups.filter((group) => group.is_member && !orderedStatuses.includes(group.status) && group.status !== 'CANCELLED')
+
+    Promise.allSettled(activeGroups.map((group) => api.getMySavings(group.id))).then((responses) => {
+      if (!active) return
+      setSavings(responses.flatMap((response) => response.status === 'fulfilled' ? [response.value] : []))
+      setSavingsPending(false)
+    })
+    return () => { active = false }
+  }, [groups, isLoading, groupError, savingsRevision])
+
+  const updateGroup = (group: BuyingGroup) => {
+    setGroups((previous) => previous.some((entry) => entry.id === group.id)
+      ? previous.map((entry) => entry.id === group.id ? group : entry)
+      : [group, ...previous])
+  }
 
   const handleGroupCreated = (newGroup: BuyingGroup) => {
-    setGroups((prev) => [newGroup, ...prev])
+    updateGroup(newGroup)
+    setActiveTab('my_groups')
+    notify('Buying group created.')
     setCatalogGroup(newGroup)
     setIsCatalogOpen(true)
   }
 
   const handleGroupJoined = (joinedGroup: BuyingGroup) => {
-    setGroups((prev) => prev.map((g) => (g.id === joinedGroup.id ? joinedGroup : g)))
+    updateGroup(joinedGroup)
+    notify('You joined the buying group.')
     setCatalogGroup(joinedGroup)
     setIsCatalogOpen(true)
   }
@@ -138,169 +164,69 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
   }
 
   const handleJoinDirect = async (group: BuyingGroup) => {
+    setJoiningGroupId(group.id)
     try {
       const updated = await api.joinGroup(group.id)
-      setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)))
-      handleOpenCatalog(updated)
-    } catch {
-      // handled
+      handleGroupJoined(updated)
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not join that group.', 'error')
+    } finally {
+      setJoiningGroupId(null)
     }
   }
 
-  const filteredGroups = groups.filter((g) =>
-    g.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (g.neighborhood?.name && g.neighborhood.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const search = searchTerm.trim().toLowerCase()
+  const myGroups = groups.filter((group) => group.is_member)
+  const nearbyGroups = groups.filter((group) => group.visibility === 'PUBLIC')
+  const filteredGroups = (activeTab === 'my_groups' ? myGroups : nearbyGroups).filter((group) =>
+    (!openOnly || group.status === 'OPEN') &&
+    [group.name, group.neighborhood?.name].some((value) => value?.toLowerCase().includes(search))
   )
-
-  const myGroupsCount = groups.filter((g) => g.is_member).length
+  const activeGroupCount = myGroups.filter((group) => !['CANCELLED', 'COMPLETED'].includes(group.status)).length
+  const hasSavings = savings.some((entry) => entry.total_packs > 0)
+  const estimatedSavings = savings.reduce((sum, entry) => sum + entry.total_savings, 0)
+  const totalPacks = savings.reduce((sum, entry) => sum + entry.total_packs, 0)
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header Profile & Neighborhood */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900">Welcome, {user?.full_name}!</h1>
-            <Badge variant="brand">Customer & Buyer</Badge>
-          </div>
-          <p className="text-sm text-slate-500 flex items-center gap-1.5">
-            <MapPin className="w-4 h-4 text-brand-600" />
-            Active Community:{' '}
-            <span className="font-semibold text-slate-700">
-              {user?.neighborhood?.name || 'Indiranagar Central'}
-            </span>{' '}
-            (Pincode: {user?.neighborhood?.postal_code || '560038'})
-          </p>
-        </div>
+    <Dashboard>
+      <DashboardHeader
+        role="Household dashboard"
+        title={`Welcome, ${user?.full_name?.trim().split(/\s+/)[0] || 'neighbor'}!`}
+        description={user?.neighborhood ? <span className="inline-flex items-center gap-2"><MapPin aria-hidden="true" className="size-4" />{user.neighborhood.name} · {user.neighborhood.postal_code}</span> : 'Find a buying group and start your household grocery list.'}
+        icon={ShoppingBag}
+      >
+        {myGroups.some((group) => group.is_organizer) && <Button variant="secondary" onClick={onOpenOrganizer}>Manage my groups</Button>}
+        <Button variant="secondary" onClick={() => setIsJoinCodeOpen(true)}><KeyRound aria-hidden="true" className="size-4" /> Join with code</Button>
+        <Button variant="outline" onClick={() => setIsCreateOpen(true)}><Plus aria-hidden="true" className="size-4" /> Create buying group</Button>
+      </DashboardHeader>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="secondary" size="sm" onClick={onOpenDemoSwitcher}>
-            <Sparkles className="w-4 h-4 mr-1.5 text-amber-500" />
-            Switch Persona
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setIsJoinCodeOpen(true)}>
-            <KeyRound className="w-4 h-4 mr-1.5 text-slate-500" />
-            Join with Code
-          </Button>
-          <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Create Buying Group
-          </Button>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Metric label="Active buying groups" value={isLoading || groupError ? '—' : activeGroupCount} icon={Users} />
+        <Metric label="Estimated savings" value={savingsPending || groupError || !hasSavings ? '—' : formatCurrency(estimatedSavings)} icon={CircleDollarSign} caption="Across active groups before final charges" />
+        <Metric label="Packs on your grocery lists" value={savingsPending || groupError ? '—' : totalPacks} icon={ClipboardList} caption="Your household only" />
       </div>
 
-      {/* Metric Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">My Active Groups</p>
-              <h3 className="text-xl font-bold text-slate-900 mt-0.5">
-                {myGroupsCount} Group{myGroupsCount === 1 ? '' : 's'}
-              </h3>
-              <p className="text-[11px] text-brand-600 font-medium mt-0.5">Pooling with neighbors</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-              <TrendingDown className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Estimated Bulk Savings</p>
-              <h3 className="text-xl font-bold text-emerald-700 mt-0.5">20% – 32%</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">vs individual retail store MRP</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Product Quality</p>
-              <h3 className="text-xl font-bold text-slate-900 mt-0.5">100% Sealed</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">Factory sealed packs only</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
-              <ShoppingBag className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Grocery Catalog</p>
-              <h3 className="text-xl font-bold text-slate-900 mt-0.5">5 Staples</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">Rice, Oil, Dal, Sugar, Flour</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Groups Area */}
-      <div className="space-y-6">
-        {/* Navigation Tabs and Search */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-3">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab('my_groups')}
-              className={`pb-2 px-3 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === 'my_groups'
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              My Buying Groups
-            </button>
-            <button
-              onClick={() => setActiveTab('explore')}
-              className={`pb-2 px-3 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === 'explore'
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Explore Neighborhood Pools
-            </button>
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`pb-2 px-3 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === 'orders'
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Past Orders & Tracking
-            </button>
-          </div>
-
+      <section className="space-y-4" aria-label="Shopping workspace">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-line bg-white p-3">
+          <DashboardNav label="Shopping views" items={sections} value={activeTab} onChange={setActiveTab} />
           {activeTab !== 'orders' && (
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search groups..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full text-xs rounded-lg border border-slate-300 pl-9 pr-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
+            <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+              <div className="relative min-w-0 flex-1">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 size-4 text-slate-500" />
+                <input type="search" aria-label="Search buying groups" placeholder="Search groups" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="control w-full pl-9" />
+              </div>
+              <label className="inline-flex min-h-11 items-center gap-2 whitespace-nowrap text-sm font-semibold">
+                <input type="checkbox" checked={openOnly} onChange={(event) => setOpenOnly(event.target.checked)} className="size-4 accent-brand-700" /> Open only
+              </label>
             </div>
           )}
         </div>
-
         {/* Content based on Active Tab */}
-        {activeTab === 'orders' ? (
-          isOrdersLoading ? (
-            <div className="text-center py-16 text-slate-400 text-xs">Loading orders & tracking...</div>
+        {groupError ? <PanelError message={groupError} onRetry={loadGroups} /> : activeTab === 'orders' ? (
+          (isOrdersLoading && userOrders.length === 0) || isLoading ? (
+            <PanelLoading label="Loading orders" />
+          ) : orderError && userOrders.length === 0 ? (
+            <PanelError message={orderError} onRetry={loadOrdersData} />
           ) : userOrders.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center space-y-3">
@@ -313,6 +239,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
             </Card>
           ) : (
             <div className="space-y-6">
+              {orderError && <PanelError message={orderError} onRetry={loadOrdersData} />}
               {userOrders.map((item) => (
                 <PickupPassCard
                   key={item.order.id}
@@ -325,26 +252,24 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
             </div>
           )
         ) : isLoading ? (
-          <div className="text-center py-16 text-slate-400 text-xs">
-            Loading buying groups...
-          </div>
+          <PanelLoading label="Loading buying groups" />
         ) : filteredGroups.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center space-y-4">
               <Users className="w-12 h-12 text-slate-300 mx-auto" />
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  {activeTab === 'my_groups'
+                  {search || openOnly ? 'No groups match your filters' : activeTab === 'my_groups'
                     ? 'You have not joined any buying groups yet'
                     : 'No public groups found in this neighborhood'}
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                  {activeTab === 'my_groups'
+                  {search || openOnly ? 'Try a different search or include groups at every stage.' : activeTab === 'my_groups'
                     ? 'Start your own group for your building or explore existing neighborhood pools.'
                     : 'Be the pioneer organizer and start the first grocery pooling group for your neighborhood!'}
                 </p>
               </div>
-              <div className="flex items-center justify-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button size="sm" onClick={() => setIsCreateOpen(true)}>
                   <Plus className="w-4 h-4 mr-1.5" />
                   Create Buying Group
@@ -365,12 +290,13 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
                 group={g}
                 onSelect={handleOpenDetail}
                 onJoin={handleJoinDirect}
+                isJoining={joiningGroupId === g.id}
                 onOpenMyList={handleOpenMyList}
               />
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Modals */}
       <CreateGroupModal
@@ -387,12 +313,13 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
       />
 
       <GroupDetailModal
+        key={selectedGroup?.id}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         group={selectedGroup}
         onGroupUpdated={(updated) => {
           setSelectedGroup(updated)
-          setGroups((prev) => prev.map((g) => (g.id === updated.id ? updated : g)))
+          updateGroup(updated)
         }}
         onOpenCatalog={handleOpenCatalog}
         onOpenMyList={handleOpenMyList}
@@ -404,20 +331,22 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
           try {
             const r = await api.getConfirmationRound(grp.id)
             if (!r) {
-              alert('Confirmation round has not opened yet.')
+              notify('The confirmation round has not opened yet.', 'error')
               return
             }
             setConfirmGroup(grp)
             setConfirmRound(r)
             setIsConfirmOpen(true)
           } catch (err: unknown) {
-            alert(err instanceof Error ? err.message : 'Failed to load confirmation round')
+            notify(err instanceof Error ? err.message : 'Could not load the confirmation round.', 'error')
           }
         }}
       />
 
       {confirmGroup && (
         <MemberConfirmationModal
+          key={confirmRound?.id}
+          myConfirmation={confirmRound?.confirmations.find((entry) => entry.user_id === user?.id)}
           isOpen={isConfirmOpen}
           onClose={() => setIsConfirmOpen(false)}
           groupId={confirmGroup.id}
@@ -440,20 +369,20 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
 
       {catalogGroup && (
         <ProductCatalogModal
+          key={catalogGroup.id}
           isOpen={isCatalogOpen}
-          onClose={() => setIsCatalogOpen(false)}
+          onClose={() => { setIsCatalogOpen(false); setSavingsRevision((value) => value + 1) }}
           groupId={catalogGroup.id}
           groupName={catalogGroup.name}
-          onItemAdded={() => {
-            // refresh
-          }}
+          onItemAdded={() => setSavingsRevision((value) => value + 1)}
         />
       )}
 
       {listGroup && (
         <HouseholdGroceryListModal
+          key={listGroup.id}
           isOpen={isListOpen}
-          onClose={() => setIsListOpen(false)}
+          onClose={() => { setIsListOpen(false); setSavingsRevision((value) => value + 1) }}
           groupId={listGroup.id}
           groupName={listGroup.name}
           onOpenCatalog={() => {
@@ -463,6 +392,6 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onOpenDemo
           }}
         />
       )}
-    </div>
+    </Dashboard>
   )
 }

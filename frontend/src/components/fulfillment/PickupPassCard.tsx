@@ -32,17 +32,20 @@ export const PickupPassCard: React.FC<PickupPassCardProps> = ({
 }) => {
   const [showPayModal, setShowPayModal] = useState(false)
   const [showDisputeModal, setShowDisputeModal] = useState(false)
+  const [copyError, setCopyError] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const isPickup = fulfillment?.fulfillment_type === 'PICKUP' || (!fulfillment && invoice?.fulfillment_type === 'PICKUP')
   const isPaid = invoice?.payment_status === 'PAID'
-  const pickupCode = fulfillment?.pickup_code || 'BS-WAIT'
+  const pickupCode = fulfillment?.pickup_code || 'Pending'
 
   const handleCopyCode = () => {
     if (fulfillment?.pickup_code) {
-      navigator.clipboard.writeText(fulfillment.pickup_code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopyError(false)
+      navigator.clipboard.writeText(fulfillment.pickup_code).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }).catch(() => setCopyError(true))
     }
   }
 
@@ -65,11 +68,12 @@ export const PickupPassCard: React.FC<PickupPassCardProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-xs space-y-6">
+    <article aria-label={invoice?.group_name ? `Order for ${invoice.group_name}` : 'Household order'} className="space-y-5 rounded-panel border border-line bg-white p-4 shadow-panel sm:p-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          {invoice?.group_name && <p className="mb-1 text-sm font-semibold text-brand-800">{invoice.group_name}</p>}
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-bold text-slate-900">
               {isPickup ? 'Neighborhood Hub Pickup Pass' : 'Home Delivery Tracker'}
             </h3>
@@ -83,7 +87,7 @@ export const PickupPassCard: React.FC<PickupPassCardProps> = ({
         </div>
 
         {/* Payment button if unpaid */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!isPaid ? (
             <Button
               size="sm"
@@ -134,15 +138,15 @@ export const PickupPassCard: React.FC<PickupPassCardProps> = ({
                 {fulfillment?.pickup_code && (
                   <button
                     onClick={handleCopyCode}
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-                    title="Copy Code"
+                    className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10 text-white transition-colors hover:bg-white/20"
+                    aria-label="Copy code"
                   >
                     {copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
                   </button>
                 )}
               </div>
               <p className="text-xs text-brand-200">
-                Hub Location: Indiranagar Community Hall, 12th Main Road
+                Example pickup hub · Indiranagar Community Hall, 12th Main Road
               </p>
             </div>
 
@@ -165,21 +169,22 @@ export const PickupPassCard: React.FC<PickupPassCardProps> = ({
               <Truck className="w-5 h-5" />
             </div>
             <div className="flex-1">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="font-semibold text-xs text-slate-900">Doorstep Drop Scheduled</h4>
                 <span className="text-xs font-semibold text-sky-700">
-                  {fulfillment?.status === 'DELIVERED' ? 'Completed' : 'Dispatching from Hub'}
+                  {fulfillment?.status === 'DELIVERED' ? 'Delivered' : fulfillment?.status === 'OUT_FOR_DELIVERY' ? 'Out for delivery' : 'Awaiting dispatch'}
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-1 flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span>{fulfillment?.delivery_address || invoice?.user_email || 'Address on record'}</span>
+                <span>{fulfillment?.delivery_address || 'Address on record'}</span>
               </p>
             </div>
           </div>
         </div>
       )}
 
+      {copyError && <p role="alert" className="text-sm text-red-800">Could not copy the code. Select and copy the displayed PIN.</p>}
       {/* Modals */}
       <PaymentModal
         isOpen={showPayModal}
@@ -194,6 +199,6 @@ export const PickupPassCard: React.FC<PickupPassCardProps> = ({
         groupOrderId={groupOrderId}
         onDisputeSubmitted={onRefresh}
       />
-    </div>
+    </article>
   )
 }

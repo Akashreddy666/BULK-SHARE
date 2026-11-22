@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import {
-  X,
   CreditCard,
   QrCode,
   ShieldCheck,
   CheckCircle2,
   Printer,
   Sparkles,
-  ShoppingBag,
-  ArrowRight,
   TrendingDown,
   Building,
 } from 'lucide-react'
 import { api } from '@/services/api'
-import { HouseholdInvoice, PaymentTransaction } from '@/types'
+import { HouseholdInvoice } from '@/types'
+import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 
 interface PaymentModalProps {
@@ -33,9 +32,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [invoice, setInvoice] = useState<HouseholdInvoice | null>(null)
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(false)
+  const [paymentError, setPaymentError] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CARD' | 'NET_BANKING'>('UPI')
-  const [completedPayment, setCompletedPayment] = useState<PaymentTransaction | null>(null)
+  const [completedPayment, setCompletedPayment] = useState<{
+    amount: number
+    transaction_ref?: string | null
+    receipt_number?: string | null
+    paid_at?: string | null
+  } | null>(null)
 
   useEffect(() => {
     if (isOpen && groupOrderId) {
@@ -47,26 +52,21 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     try {
       setLoading(true)
       setError(null)
+      setPaymentError('')
+      setCompletedPayment(null)
       const data = await api.getHouseholdInvoice(groupOrderId)
       setInvoice(data)
       if (data.payment_status === 'PAID') {
         // Already paid
         setCompletedPayment({
-          id: 'existing',
-          group_order_id: groupOrderId,
-          user_id: data.user_id,
           amount: data.final_payable,
-          currency: 'INR',
-          payment_method: 'UPI',
-          transaction_ref: data.transaction_ref || 'TXN-BS-PAID',
-          receipt_number: data.receipt_number || 'RCP-BS-PAID',
-          status: 'COMPLETED',
-          paid_at: data.paid_at || new Date().toISOString(),
-          created_at: data.paid_at || new Date().toISOString(),
+          transaction_ref: data.transaction_ref,
+          receipt_number: data.receipt_number,
+          paid_at: data.paid_at,
         })
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load household invoice')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load household invoice')
     } finally {
       setLoading(false)
     }
@@ -75,7 +75,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const handleSimulatePayment = async () => {
     try {
       setPaying(true)
-      setError(null)
+      setPaymentError('')
       const res = await api.simulatePayment(groupOrderId, {
         payment_method: paymentMethod,
         notes: `Simulated settlement via ${paymentMethod}`,
@@ -93,50 +93,28 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       if (onPaymentSuccess) {
         onPaymentSuccess()
       }
-    } catch (err: any) {
-      setError(err?.message || 'Payment simulation failed. Please try again.')
+    } catch (err: unknown) {
+      setPaymentError(err instanceof Error ? err.message : 'Payment simulation failed. Please try again.')
     } finally {
       setPaying(false)
     }
   }
 
+  const savings = invoice ? formatCurrency(invoice.subtotal_retail - invoice.final_payable) : 'Unavailable'
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                {completedPayment ? 'Settlement Receipt' : 'Order Payment & Invoice'}
-              </h2>
-              <p className="text-xs text-slate-500">
-                {invoice?.group_name || 'Neighborhood Bulk Buying Group'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-6">
+    <Modal isOpen={isOpen} onClose={() => { if (!paying) onClose() }} title={completedPayment ? 'Settlement Receipt' : 'Order Payment & Invoice'} description={invoice?.group_name || 'Household order'} size="lg">
+      <div className="space-y-5">
           {loading ? (
             <div className="py-12 text-center text-sm text-slate-500">
               Loading household invoice details...
             </div>
           ) : error ? (
-            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
-              {error}
+            <div role="alert" className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              <p>{error}</p>
+              <Button variant="outline" size="sm" onClick={loadInvoice}>Try again</Button>
             </div>
           ) : completedPayment ? (
             /* PAID RECEIPT VIEW */
@@ -159,7 +137,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       Official Tax Invoice
                     </span>
                     <h4 className="font-bold text-slate-900 text-sm">
-                      Receipt #{completedPayment.receipt_number}
+                      {completedPayment.receipt_number ? `Receipt #${completedPayment.receipt_number}` : 'Payment received'}
                     </h4>
                   </div>
                   <Badge variant="success">PAID</Badge>
@@ -169,13 +147,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   <div>
                     <span className="text-slate-400 block text-[10px]">TRANSACTION REF</span>
                     <span className="font-mono font-medium text-slate-800">
-                      {completedPayment.transaction_ref}
+                      {completedPayment.transaction_ref ?? 'Unavailable'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">PAYMENT DATE</span>
                     <span className="font-medium text-slate-800">
-                      {new Date(completedPayment.paid_at).toLocaleString()}
+                      {completedPayment.paid_at ? new Date(completedPayment.paid_at).toLocaleString() : 'Unavailable'}
                     </span>
                   </div>
                   <div>
@@ -210,11 +188,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
 
                 {/* Total & Savings summary */}
-                <div className="border-t border-slate-200/80 pt-3 flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
                   <div>
                     <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
                       <TrendingDown className="w-3.5 h-3.5" />
-                      Saved ₹{invoice?.total_savings.toFixed(2)} vs Retail
+                      Savings vs. sample retail {savings}
                     </span>
                   </div>
                   <div className="text-right">
@@ -287,10 +265,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-2 border-t border-slate-200 font-bold text-slate-900 text-sm">
+                  <div className="flex flex-wrap justify-between gap-2 border-t border-line pt-2 text-sm font-bold text-ink">
                     <span className="text-emerald-700 font-semibold flex items-center gap-1 text-xs">
                       <Sparkles className="w-3.5 h-3.5" />
-                      You Save ₹{invoice?.total_savings.toFixed(2)}
+                      Savings vs. sample retail {savings}
                     </span>
                     <span>Total Payable: ₹{invoice?.final_payable.toFixed(2)}</span>
                   </div>
@@ -302,7 +280,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Select Simulated Payment Method
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('UPI')}
@@ -361,8 +339,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </span>
               </div>
 
+              {paymentError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{paymentError}</p>}
+
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
                 <Button variant="outline" onClick={onClose} disabled={paying}>
                   Cancel
                 </Button>
@@ -376,15 +356,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   ) : (
                     <>
                       Pay ₹{invoice?.final_payable.toFixed(2)}
-                      <ArrowRight className="w-4 h-4 ml-1.5" />
                     </>
                   )}
                 </Button>
               </div>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

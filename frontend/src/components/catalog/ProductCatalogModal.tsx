@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   ShoppingBag,
   Check,
@@ -7,13 +7,14 @@ import {
   Sparkles,
   ShieldCheck,
   AlertCircle,
-  Tag,
+  Search,
 } from 'lucide-react'
 import { Product, ProductVariant, ProductCategory, BrandPreference } from '@/types'
 import { api, ApiError } from '@/services/api'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { PanelError, PanelLoading } from '@/components/dashboard/Dashboard'
 import { formatCurrency } from '@/lib/utils'
 
 interface ProductCatalogModalProps {
@@ -43,6 +44,9 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
   const [products, setProducts] = useState<Product[]>([])
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'ALL'>('ALL')
   const [isLoading, setIsLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [loadError, setLoadError] = useState(false)
+  const [retry, setRetry] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   // Selection states per variant
@@ -51,24 +55,21 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
   const [addingVariantId, setAddingVariantId] = useState<string | null>(null)
   const [addedVariantId, setAddedVariantId] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (isOpen) {
-      loadCatalog()
-    }
-  }, [isOpen, selectedCategory])
+  const addedTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(addedTimer.current), [])
 
-  const loadCatalog = async () => {
+  useEffect(() => {
+    if (!isOpen) return
+    let active = true
     setIsLoading(true)
+    setLoadError(false)
     setError(null)
-    try {
-      const data = await api.getProducts(selectedCategory === 'ALL' ? undefined : selectedCategory)
-      setProducts(data)
-    } catch {
-      setError('Could not load grocery catalog. Please check your network.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    api.getProducts(selectedCategory === 'ALL' ? undefined : selectedCategory)
+      .then((data) => { if (active) setProducts(data) })
+      .catch(() => { if (active) setLoadError(true) })
+      .finally(() => { if (active) setIsLoading(false) })
+    return () => { active = false }
+  }, [isOpen, selectedCategory, retry])
 
   const handleQuantityChange = (variantId: string, delta: number) => {
     setPackQuantities((prev) => {
@@ -96,7 +97,8 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
       })
 
       setAddedVariantId(variant.id)
-      setTimeout(() => setAddedVariantId(null), 2000)
+      window.clearTimeout(addedTimer.current)
+      addedTimer.current = window.setTimeout(() => setAddedVariantId(null), 2000)
       onItemAdded?.()
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -109,6 +111,15 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
     }
   }
 
+  const query = search.trim().toLowerCase()
+  const visibleProducts = products
+    .map((product) => ({
+      ...product,
+      variants: product.variants.filter((variant) => [product.name, variant.brand, variant.sku].some((value) => value.toLowerCase().includes(query))),
+    }))
+    .filter((product) => product.variants.length > 0)
+  const categoryImages: Partial<Record<ProductCategory, string>> = { RICE: 'rice', OIL: 'oil', DAL: 'dal', FLOUR: 'flour' }
+
   return (
     <Modal
       isOpen={isOpen}
@@ -117,14 +128,20 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
       description={`Add sealed staple packages to your household list for "${groupName}".`}
       size="lg"
     >
-      <div className="space-y-4 pt-1">
+      <div className="space-y-4">
+        <div className="relative">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 size-4 text-slate-500" />
+          <input type="search" aria-label="Search grocery catalog" placeholder="Search products, brands or packs" className="control w-full pl-9" value={search} onChange={(event) => setSearch(event.target.value)} />
+        </div>
         {/* Category Pills */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div role="group" aria-label="Product categories" className="flex flex-wrap gap-1.5">
           {CATEGORIES.map((cat) => (
             <button
               key={cat.value}
+              type="button"
+              aria-pressed={selectedCategory === cat.value}
               onClick={() => setSelectedCategory(cat.value)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+              className={`min-h-10 rounded-full px-3 text-sm font-semibold whitespace-nowrap transition-colors ${
                 selectedCategory === cat.value
                   ? 'bg-brand-600 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -135,46 +152,34 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
           ))}
         </div>
 
-        {/* Sealed Pack Compliance Notice */}
-        <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-between text-xs text-emerald-800">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>
-              <strong>Sealed Manufacturer Packs Only:</strong> Factory packaged & tamper-proof. No loose grains or repacking.
-            </span>
-          </div>
-          <Badge variant="success" className="text-[10px] hidden sm:inline-block">100% Sealed</Badge>
-        </div>
-
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
+        <p className="flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm text-brand-900">
+          <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          Every item is a manufacturer-sealed pack. Your selections are private.
+        </p>
+        {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+        <p role="status" className="sr-only">{addedVariantId ? 'Item added to your grocery list.' : ''}</p>
 
         {/* Product List */}
         {isLoading ? (
-          <div className="text-center py-12 text-slate-400 text-xs">
-            Loading staple groceries...
-          </div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 text-xs">
-            No products found in this category.
-          </div>
+          <PanelLoading label="Loading staple groceries" count={2} />
+        ) : loadError ? (
+          <PanelError message="The grocery catalog could not be loaded." onRetry={() => setRetry((value) => value + 1)} />
+        ) : visibleProducts.length === 0 ? (
+          <p className="rounded-panel border border-line bg-canvas p-5 text-sm text-slate-700">No packs match your search or category.</p>
         ) : (
-          <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
-            {products.map((product) => (
+          <div className="space-y-3">
+            {visibleProducts.map((product) => (
               <div
                 key={product.id}
-                className="p-4 rounded-xl border border-slate-200 bg-white space-y-3"
+                className="space-y-3 rounded-panel border border-line bg-white p-4"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  {categoryImages[product.category] && <img src={`/pantry/${categoryImages[product.category]}.webp`} alt="" width="72" height="72" loading="lazy" className="size-16 shrink-0 rounded-xl object-cover sm:size-[4.5rem]" />}
                   <div>
                     <Badge variant="outline" className="text-[10px] mb-1">
                       {product.category}
                     </Badge>
-                    <h4 className="text-sm font-bold text-slate-900">{product.name}</h4>
+                    <h3 className="text-lg font-bold text-brand-950">{product.name}</h3>
                     {product.description && (
                       <p className="text-xs text-slate-500 mt-0.5">{product.description}</p>
                     )}
@@ -192,14 +197,14 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                     return (
                       <div
                         key={v.id}
-                        className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        className="flex flex-wrap items-end justify-between gap-3 pt-3"
                       >
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-slate-900">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-bold text-brand-950">
                               {v.brand} ({v.pack_quantity} {v.pack_unit} sealed pack)
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-xs text-slate-600">
                               SKU: {v.sku}
                             </span>
                           </div>
@@ -211,12 +216,13 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                           </div>
 
                           {/* Brand Preference Selection */}
-                          <div className="flex items-center gap-2 pt-1">
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
                             <span className="text-[11px] text-slate-500">Brand match:</span>
                             <button
                               type="button"
+                              aria-pressed={pref === 'EXACT'}
                               onClick={() => handleBrandPrefChange(v.id, 'EXACT')}
-                              className={`text-[10px] px-2 py-0.5 rounded font-medium border ${
+                              className={`min-h-10 rounded-lg border px-2 text-sm font-medium ${
                                 pref === 'EXACT'
                                   ? 'bg-brand-50 border-brand-600 text-brand-700'
                                   : 'border-slate-200 text-slate-500 hover:border-slate-300'
@@ -226,29 +232,31 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                             </button>
                             <button
                               type="button"
+                              aria-pressed={pref === 'FLEXIBLE'}
                               onClick={() => handleBrandPrefChange(v.id, 'FLEXIBLE')}
                               title="Allow equivalent quality brand to achieve maximum wholesale pool discount"
-                              className={`text-[10px] px-2 py-0.5 rounded font-medium border flex items-center gap-1 ${
+                              className={`min-h-10 rounded-lg border px-2 text-sm font-medium flex items-center gap-1 ${
                                 pref === 'FLEXIBLE'
                                   ? 'bg-emerald-50 border-emerald-600 text-emerald-800'
                                   : 'border-slate-200 text-slate-500 hover:border-slate-300'
                               }`}
                             >
                               <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
-                              Flexible Equivalent (Best Discount)
+                              Flexible brand
                             </button>
                           </div>
                         </div>
 
                         {/* Quantity and Add Button */}
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2">
                           {/* Pack Stepper */}
                           <div className="flex items-center border border-slate-300 rounded-lg bg-white">
                             <button
                               type="button"
+                              aria-label={`Remove one pack of ${v.brand}`}
                               onClick={() => handleQuantityChange(v.id, -1)}
                               disabled={qty <= 1}
-                              className="p-1.5 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="quantity-button"
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
@@ -257,8 +265,9 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                             </span>
                             <button
                               type="button"
+                              aria-label={`Add one pack of ${v.brand}`}
                               onClick={() => handleQuantityChange(v.id, 1)}
-                              className="p-1.5 text-slate-500 hover:text-slate-900"
+                              className="quantity-button"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -269,7 +278,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                             variant={isJustAdded ? 'success' : 'primary'}
                             onClick={() => handleAddToList(v)}
                             isLoading={isAdding}
-                            disabled={isAdding}
+                            disabled={!!addingVariantId}
                             className="text-xs shrink-0 min-w-[110px]"
                           >
                             {isJustAdded ? (
@@ -294,7 +303,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
           </div>
         )}
 
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
           <p className="text-[11px] text-slate-500">
             Added items are saved privately to your household grocery list.
           </p>

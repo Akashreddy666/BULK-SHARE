@@ -117,23 +117,8 @@ def submit_quotation(
         select(SupplierProfile).where(SupplierProfile.user_id == current_user.id)
     ).scalar_one_or_none()
 
-    if not supplier:
-        # If admin or demo supplier, auto-provision supplier profile if missing
-        if current_user.role in (UserRole.SUPPLIER.value, UserRole.ADMIN.value):
-            supplier = SupplierProfile(
-                user_id=current_user.id,
-                company_name=current_user.full_name or "Verified Wholesaler",
-                city="Bengaluru",
-                is_verified=True,
-            )
-            db.add(supplier)
-            db.commit()
-            db.refresh(supplier)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only registered suppliers can submit quotations",
-            )
+    if current_user.role not in (UserRole.SUPPLIER.value, UserRole.ADMIN.value) or not supplier or not supplier.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only verified suppliers can submit quotations")
 
     # 2. Verify snapshot exists
     snapshot = db.execute(

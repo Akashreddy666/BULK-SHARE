@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useId, useRef } from 'react'
 import { Bell, Check, CheckCheck, Package, CreditCard, Truck, AlertCircle, ShoppingBag } from 'lucide-react'
 import { api } from '@/services/api'
 import { Notification } from '@/types'
@@ -7,6 +7,9 @@ export const NotificationBell: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelId = useId()
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const unreadCount = notifications.filter((n) => !n.is_read).length
@@ -15,8 +18,9 @@ export const NotificationBell: React.FC = () => {
     try {
       const data = await api.getNotifications()
       setNotifications(data)
-    } catch (err) {
-      // User might be guest or offline
+      setError('')
+    } catch {
+      setError('Could not load notifications.')
     }
   }
 
@@ -43,8 +47,8 @@ export const NotificationBell: React.FC = () => {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       )
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setError('Could not mark notifications as read.')
     }
   }
 
@@ -53,8 +57,8 @@ export const NotificationBell: React.FC = () => {
       setLoading(true)
       await api.markAllNotificationsRead()
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setError('Could not mark notifications as read.')
     } finally {
       setLoading(false)
     }
@@ -80,25 +84,35 @@ export const NotificationBell: React.FC = () => {
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="sm:relative" ref={dropdownRef} onKeyDown={(event) => {
+      if (event.key === 'Escape' && isOpen) {
+        event.stopPropagation()
+        setIsOpen(false)
+        buttonRef.current?.focus()
+      }
+    }}>
       <button
+        ref={buttonRef}
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={panelId}
         onClick={() => {
           setIsOpen(!isOpen)
           if (!isOpen) loadNotifications()
         }}
         aria-label="View notifications"
-        className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors focus:outline-hidden"
+        className="relative grid size-11 place-items-center rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors focus:outline-hidden"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex items-center justify-center min-w-4.5 h-4.5 px-1 text-[10px] font-bold text-white bg-brand-600 rounded-full border-2 border-white animate-pulse">
+          <span className="absolute top-1 right-1 flex items-center justify-center min-w-4.5 h-4.5 px-1 text-[10px] font-bold text-white bg-brand-700 rounded-full border-2 border-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+        <section id={panelId} aria-label="Notifications" className="page-enter absolute inset-x-4 top-full z-50 mt-2 overflow-hidden rounded-panel border border-line bg-white shadow-overlay sm:left-auto sm:right-0 sm:w-96">
           <div className="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-sm text-slate-900">Notifications</span>
@@ -112,7 +126,7 @@ export const NotificationBell: React.FC = () => {
               <button
                 onClick={handleMarkAllRead}
                 disabled={loading}
-                className="text-xs font-medium text-brand-700 hover:text-brand-800 flex items-center gap-1 hover:underline"
+                className="min-h-10 text-sm font-medium text-brand-700 hover:text-brand-800 flex items-center gap-1 hover:underline"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
                 Mark all read
@@ -120,7 +134,11 @@ export const NotificationBell: React.FC = () => {
             )}
           </div>
 
-          <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
+          {error && <div role="alert" className="flex flex-wrap items-center gap-2 bg-red-50 p-3 text-sm text-red-800">
+            {error}
+            <button type="button" onClick={loadNotifications} className="min-h-10 font-semibold underline">Refresh notifications</button>
+          </div>}
+          <div className="max-h-[min(24rem,60dvh)] divide-y divide-line overflow-y-auto overscroll-contain">
             {notifications.length === 0 ? (
               <div className="py-8 text-center text-slate-400 text-xs">
                 No notifications right now
@@ -144,14 +162,14 @@ export const NotificationBell: React.FC = () => {
                       {!n.is_read && (
                         <button
                           onClick={(e) => handleMarkAsRead(n.id, e)}
-                          title="Mark as read"
-                          className="text-slate-400 hover:text-brand-600 p-0.5"
+                          aria-label={`Mark ${n.title} as read`}
+                          className="grid size-11 shrink-0 place-items-center rounded-lg text-brand-700 hover:bg-brand-100"
                         >
                           <Check className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
-                    <p className="text-xs text-slate-600 mt-0.5 line-clamp-2 leading-relaxed">
+                    <p className="break-words text-sm text-slate-700 mt-0.5 leading-relaxed">
                       {n.message}
                     </p>
                     <span className="text-[10px] text-slate-400 block mt-1">
@@ -162,7 +180,7 @@ export const NotificationBell: React.FC = () => {
               ))
             )}
           </div>
-        </div>
+        </section>
       )}
     </div>
   )

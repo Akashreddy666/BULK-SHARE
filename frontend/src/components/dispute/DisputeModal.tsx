@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { X, AlertTriangle, Send } from 'lucide-react'
+import { Send } from 'lucide-react'
 import { api } from '@/services/api'
 import { DisputeCategory } from '@/types'
+import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 
 interface DisputeModalProps {
@@ -71,37 +72,16 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
       if (onDisputeSubmitted) {
         onDisputeSubmitted()
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to submit dispute. Please try again.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to submit dispute. Please try again.')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Report an Issue or Dispute</h2>
-              <p className="text-xs text-slate-500">Order claim resolution with Platform Admin</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
+    <Modal isOpen={isOpen} onClose={() => { if (!submitting) onClose() }} title="Report an Issue or Dispute" description="Submit a simulated order issue for administrator review." size="md">
+      <div className="space-y-5">
           {success ? (
             <div className="text-center py-8 space-y-4">
               <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto">
@@ -119,7 +99,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                   {error}
                 </div>
               )}
@@ -189,8 +169,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
               </div>
             </form>
           )}
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

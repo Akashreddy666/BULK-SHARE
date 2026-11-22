@@ -1,437 +1,431 @@
-import React, { useState, useEffect } from 'react'
-import {
-  Shield,
-  Users,
-  Store,
-  Layers,
-  CheckCircle,
-  AlertOctagon,
-  FileText,
-  Activity,
-  Sparkles,
-  ArrowRight,
-  Truck,
-  AlertTriangle,
-  RotateCcw,
-  Check,
-  X,
-  Package,
-} from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
-import { api } from '@/services/api'
-import { BuyingGroup, GroupOrder, ProcurementOrder, OrderDispute } from '@/types'
-import { Button } from '@/components/ui/Button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
+import { useEffect, useState, type FormEvent } from 'react'
+import { AlertCircle, CircleDollarSign, FileText, Layers, RefreshCw, ShieldCheck, Store, Truck, Users } from 'lucide-react'
+import { Dashboard, DashboardHeader, DashboardNav, Metric, PanelError, PanelLoading } from '@/components/dashboard/Dashboard'
+import { ActionDialog, type PendingAction } from '@/components/ui/ActionDialog'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import { api } from '@/services/api'
+import type { AdminAccount, BuyingGroup, GroupOrder, GroupOrderPaymentSummary, MemberFulfillment, OrderDispute, ProcurementOrder, SupplierProfile, SupplierQuotation } from '@/types'
 
-interface AdminDashboardProps {
-  onOpenDemoSwitcher: () => void
+const sections = [
+  { id: 'orders', label: 'Procurement & payments', icon: Truck },
+  { id: 'groups', label: 'Buying groups', icon: Users },
+  { id: 'users', label: 'Accounts', icon: ShieldCheck },
+  { id: 'suppliers', label: 'Suppliers', icon: Store },
+  { id: 'disputes', label: 'Disputes', icon: AlertCircle },
+] as const
+
+const orderedStatuses = ['LOCKED', 'PROCUREMENT', 'FULFILLMENT', 'COMPLETED']
+const pendingDispute = (dispute: OrderDispute) => ['OPEN', 'UNDER_REVIEW'].includes(dispute.status)
+const statusLabel = (value: string) => value.toLowerCase().replace(/_/g, ' ')
+
+interface ReviewAction {
+  title: string
+  description: string
+  label: string
+  submit: (reason: string) => Promise<void>
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onOpenDemoSwitcher }) => {
-  const { user } = useAuth()
-  const [lockedGroups, setLockedGroups] = useState<BuyingGroup[]>([])
-  const [ordersMap, setOrdersMap] = useState<Record<string, { order: GroupOrder; po?: ProcurementOrder | null }>>({})
+interface OrderRecord {
+  group: BuyingGroup
+  order: GroupOrder
+  procurement: ProcurementOrder | null
+  payment: GroupOrderPaymentSummary
+  fulfillments: MemberFulfillment[]
+}
+
+export function AdminDashboard() {
+  const notify = useToast()
+  const [tab, setTab] = useState<typeof sections[number]['id']>('orders')
+  const [review, setReview] = useState<ReviewAction | null>(null)
+  const [accounts, setAccounts] = useState<AdminAccount[]>([])
+  const [accountSearch, setAccountSearch] = useState('')
+  const [groups, setGroups] = useState<BuyingGroup[]>([])
+  const [suppliers, setSuppliers] = useState<SupplierProfile[]>([])
+  const [orders, setOrders] = useState<OrderRecord[]>([])
   const [disputes, setDisputes] = useState<OrderDispute[]>([])
   const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-
-  // Resolution modal state
+  const [loadError, setLoadError] = useState('')
+  const [action, setAction] = useState<PendingAction | null>(null)
   const [selectedDispute, setSelectedDispute] = useState<OrderDispute | null>(null)
-  const [resolveStatus, setResolveStatus] = useState<'RESOLVED' | 'REJECTED'>('RESOLVED')
-  const [resolutionNotes, setResolutionNotes] = useState('')
-  const [refundAmount, setRefundAmount] = useState<number>(0)
-  const [resolving, setResolving] = useState(false)
+  const [quoteGroup, setQuoteGroup] = useState<BuyingGroup | null>(null)
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const selectedOrder = orders.find(({ order }) => order.id === selectedOrderId)
 
-  const loadAdminData = async () => {
+  async function load() {
+    setLoading(true)
+    setLoadError('')
     try {
-      setLoading(true)
-      // 1. Load groups
-      const allGroups = await api.getGroups()
-      const locked = allGroups.filter((g) => g.status === 'LOCKED' || g.status === 'COMPLETED')
-      setLockedGroups(locked)
-
-      // 2. Load orders & procurement for locked groups
-      const map: Record<string, { order: GroupOrder; po?: ProcurementOrder | null }> = {}
-      for (const g of locked) {
-        try {
-          const ord = await api.getGroupOrder(g.id)
-          if (ord) {
-            const po = await api.getOrderProcurement(ord.id).catch(() => null)
-            map[g.id] = { order: ord, po }
-          }
-        } catch {
-          // ignore
-        }
-      }
-      setOrdersMap(map)
-
-      // 3. Load disputes
-      const disps = await api.getAdminDisputes()
-      setDisputes(disps)
-    } catch (err) {
-      console.error(err)
+      const [allGroups, allSuppliers, allDisputes, allAccounts] = await Promise.all([api.getGroups(), api.getSuppliers(), api.getAdminDisputes(), api.getAdminUsers()])
+      const records = await Promise.all(allGroups.filter((group) => orderedStatuses.includes(group.status)).map(async (group) => {
+        const order = await api.getGroupOrder(group.id)
+        if (!order) return null
+        const [procurement, payment, fulfillments] = await Promise.all([
+          api.getOrderProcurement(order.id),
+          api.getPaymentSummary(order.id),
+          api.getOrderFulfillments(order.id),
+        ])
+        return { group, order, procurement, payment, fulfillments }
+      }))
+      setAccounts(allAccounts)
+      setGroups(allGroups)
+      setSuppliers(allSuppliers)
+      setDisputes(allDisputes)
+      setOrders(records.filter((record) => record !== null))
+    } catch {
+      setLoadError('The operations workspace could not be loaded.')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    loadAdminData()
-  }, [])
+  useEffect(() => { void load() }, [])
 
-  const handlePlaceWholesalePO = async (groupId: string, orderId: string) => {
-    try {
-      setActionLoading(orderId)
-      const po = await api.adminPlaceProcurementOrder(orderId, {
-        notes: 'Admin wholesale dispatch to supplier',
-      })
-      setOrdersMap((prev) => ({
-        ...prev,
-        [groupId]: { ...prev[groupId], po },
-      }))
-      alert(`Wholesale Purchase Order #${po.po_number} successfully placed with supplier!`)
-    } catch (err: any) {
-      alert(err?.message || 'Failed to place purchase order')
-    } finally {
-      setActionLoading(null)
-    }
+  function prepareProcurement(record: OrderRecord) {
+    setAction({
+      title: 'Issue a simulated purchase order?',
+      description: `Create a demo purchase order for ${record.group.name}. This sends no live order to a supplier.`,
+      label: 'Issue purchase order',
+      run: async () => {
+        const procurement = await api.adminPlaceProcurementOrder(record.order.id, { notes: 'Simulated procurement initiated by administrator.' })
+        const fulfillments = await api.getOrderFulfillments(record.order.id)
+        setOrders((previous) => previous.map((entry) => entry.order.id === record.order.id ? { ...entry, procurement, fulfillments } : entry))
+        notify(`Simulated purchase order ${procurement.po_number} issued.`)
+      },
+    })
   }
 
-  const handleOpenResolveModal = (disp: OrderDispute) => {
-    setSelectedDispute(disp)
-    setResolveStatus('RESOLVED')
-    setResolutionNotes('Damaged packaging verified. Issued simulated store credit refund.')
-    setRefundAmount(disp.refund_amount || 400)
+  function reviewAccount(account: AdminAccount) {
+    const active = !account.is_active
+    setReview({
+      title: active ? 'Reactivate account?' : 'Deactivate account?',
+      description: account.email,
+      label: active ? 'Reactivate account' : 'Deactivate account',
+      submit: async (reason) => {
+        const updated = await api.updateAccountStatus(account.id, active, reason)
+        setAccounts((previous) => previous.map((item) => item.id === updated.id ? updated : item))
+        notify(active ? 'Account reactivated.' : 'Account deactivated.')
+      },
+    })
   }
 
-  const handleConfirmResolve = async () => {
-    if (!selectedDispute) return
-    try {
-      setResolving(true)
-      await api.resolveDispute(selectedDispute.id, {
-        status: resolveStatus,
-        resolution_notes: resolutionNotes,
-        refund_amount: resolveStatus === 'RESOLVED' ? refundAmount : 0,
-      })
-      setSelectedDispute(null)
-      loadAdminData()
-    } catch (err: any) {
-      alert(err?.message || 'Failed to resolve dispute')
-    } finally {
-      setResolving(false)
-    }
+  function reviewSupplier(supplier: SupplierProfile) {
+    const verified = !supplier.is_verified
+    setReview({
+      title: verified ? 'Verify this supplier?' : 'Withdraw supplier verification?',
+      description: `${supplier.company_name} · ${supplier.city}`,
+      label: verified ? 'Verify supplier' : 'Withdraw verification',
+      submit: async (reason) => {
+        const updated = await api.reviewSupplier(supplier.id, verified, reason)
+        setSuppliers((previous) => previous.map((item) => item.id === updated.id ? updated : item))
+        notify(verified ? 'Supplier verified for the demo.' : 'Supplier verification withdrawn.')
+      },
+    })
   }
 
-  const openDisputesCount = disputes.filter((d) => d.status === 'OPEN').length
+  const query = accountSearch.trim().toLowerCase()
+  const filteredAccounts = accounts.filter((account) => [account.full_name, account.email, account.role].some((value) => value.toLowerCase().includes(query)))
+  const openDisputes = disputes.filter(pendingDispute).length
+  const totalsAvailable = !loading && !loadError
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header Profile */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900">Platform Administrator Console</h1>
-            <Badge variant="warning">
-              <Shield className="w-3 h-3 mr-1" />
-              Global Admin
-            </Badge>
-          </div>
-          <p className="text-sm text-slate-500">
-            System moderation, wholesale procurement placement, fulfillment oversight, and dispute resolution.
-          </p>
-        </div>
+    <Dashboard>
+      <DashboardHeader role="Platform administrator" title="Operations console" description="Review group activity, supplier verification status, simulated purchases and customer disputes." icon={ShieldCheck}>
+        <Button variant="outline" onClick={load} isLoading={loading}><RefreshCw aria-hidden="true" className="size-4" /> Refresh records</Button>
+      </DashboardHeader>
 
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" onClick={onOpenDemoSwitcher}>
-            <Sparkles className="w-4 h-4 mr-1.5 text-amber-500" />
-            Switch Role Persona
-          </Button>
-          <Button size="sm" variant="outline" onClick={loadAdminData}>
-            <RotateCcw className="w-3.5 h-3.5 mr-1" />
-            Refresh
-          </Button>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="Buying groups" value={totalsAvailable ? groups.length : '—'} icon={Users} />
+        <Metric label="Verified suppliers" value={totalsAvailable ? suppliers.filter((supplier) => supplier.is_verified).length : '—'} icon={Store} />
+        <Metric label="Locked purchases" value={totalsAvailable ? orders.length : '—'} icon={Layers} />
+        <Metric label="Open disputes" value={totalsAvailable ? openDisputes : '—'} icon={AlertCircle} />
       </div>
 
-      {/* Admin Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Registered Households</p>
-              <h3 className="text-xl font-bold text-slate-900 mt-0.5">38 Users</h3>
-              <p className="text-[11px] text-purple-600 font-medium mt-0.5">Indiranagar & Koramangala</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center shrink-0">
-              <Store className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Verified Wholesalers</p>
-              <h3 className="text-xl font-bold text-slate-900 mt-0.5">3 Suppliers</h3>
-              <p className="text-[11px] text-sky-600 font-medium mt-0.5">APMC & Direct Mills</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
-              <Layers className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Locked Purchases</p>
-              <h3 className="text-xl font-bold text-slate-900 mt-0.5">{lockedGroups.length} Orders</h3>
-              <p className="text-[11px] text-brand-600 font-medium mt-0.5">Ready for Wholesale PO</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Customer Disputes</p>
-              <h3 className="text-xl font-bold text-amber-700 mt-0.5">{openDisputesCount} Open</h3>
-              <p className="text-[11px] text-amber-600 font-medium mt-0.5">Requires admin review</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="rounded-panel border border-line bg-white p-3">
+        <DashboardNav label="Operations views" items={sections} value={tab} onChange={setTab} />
       </div>
 
-      {/* Operations Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Module 1: Wholesale Procurement Placement (FR-PROC-01) */}
+      {loadError && <PanelError message={loadError} onRetry={load} />}
+      {loading && <PanelLoading label="Loading operations records" />}
+
+      {totalsAvailable && tab === 'orders' && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle className="text-base">Wholesale Procurement Desk (FR-PROC-01)</CardTitle>
-              <CardDescription className="text-xs">
-                Per business rules, organizers select quotations, but Platform Admins issue the simulated purchase order (PO) to suppliers.
-              </CardDescription>
-            </div>
-            <Badge variant="brand">Admin Authority</Badge>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-3 text-xs">
-            {lockedGroups.length === 0 ? (
-              <div className="py-8 text-center text-slate-400">
-                No locked group purchases awaiting procurement.
-              </div>
-            ) : (
-              lockedGroups.map((g) => {
-                const entry = ordersMap[g.id]
-                const ord = entry?.order
-                const po = entry?.po
-
-                return (
-                  <div
-                    key={g.id}
-                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 text-sm">{g.name}</span>
-                      <Badge variant={po ? 'success' : 'warning'}>
-                        {po ? `PO: ${po.status}` : 'AWAITING PO DISPATCH'}
-                      </Badge>
-                    </div>
-
-                    <div className="text-xs text-slate-600 space-y-1">
-                      <p>
-                        Total Wholesale Volume:{' '}
-                        <span className="font-semibold text-slate-800">
-                          {ord ? `${ord.total_packs} packs (₹${ord.total_wholesale_amount.toFixed(2)})` : 'Loading...'}
-                        </span>
-                      </p>
-                      {po && (
-                        <p className="font-mono text-[11px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md inline-block">
-                          PO Number: {po.po_number}
-                        </p>
-                      )}
-                    </div>
-
-                    {!po && ord && (
-                      <div className="pt-2 flex justify-end">
-                        <Button
-                          size="sm"
-                          onClick={() => handlePlaceWholesalePO(g.id, ord.id)}
-                          disabled={actionLoading === ord.id}
-                          className="bg-brand-600 hover:bg-brand-700 text-white text-xs"
-                        >
-                          <Truck className="w-3.5 h-3.5 mr-1.5" />
-                          {actionLoading === ord.id ? 'Dispatching...' : 'Place Wholesale PO'}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })
-            )}
+          <CardHeader><CardTitle>Procurement &amp; simulated payments</CardTitle><CardDescription>Track collection, issue a purchase order and follow fulfillment.</CardDescription></CardHeader>
+          <CardContent className="grid gap-3 lg:grid-cols-2">
+            {orders.length === 0 && <p className="text-sm text-slate-600">Locked group purchases will appear here.</p>}
+            {orders.map((record) => (
+              <article key={record.order.id} className="min-w-0 space-y-3 rounded-xl border border-line bg-canvas p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <h3 className="font-bold text-brand-950">{record.group.name}</h3>
+                  <Badge variant={record.procurement ? 'success' : 'warning'}>{record.procurement ? statusLabel(record.procurement.status) : 'Purchase order pending'}</Badge>
+                </div>
+                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                  <div><dt className="text-slate-600">Wholesale total</dt><dd className="font-bold tabular-nums">{formatCurrency(record.order.total_wholesale_amount)}</dd></div>
+                  <div><dt className="text-slate-600">Simulated payments collected</dt><dd className="font-bold tabular-nums">{formatCurrency(record.payment.total_collected)} · {record.payment.paid_members_count}/{record.payment.total_members} households</dd></div>
+                </dl>
+                {record.procurement && <p className="text-sm text-slate-700">Purchase order {record.procurement.po_number}</p>}
+                <div className="flex flex-wrap gap-2">
+                  {!record.procurement && <Button size="sm" onClick={() => prepareProcurement(record)}>Place wholesale PO</Button>}
+                  <Button size="sm" variant="outline" onClick={() => setSelectedOrderId(record.order.id)}>Track fulfillment</Button>
+                </div>
+              </article>
+            ))}
           </CardContent>
         </Card>
-
-        {/* Module 2: Customer Disputes & Claims Management */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle className="text-base">Customer Disputes & Claims</CardTitle>
-              <CardDescription className="text-xs">
-                Inspect customer damage or fulfillment tickets and issue simulated refunds.
-              </CardDescription>
-            </div>
-            {openDisputesCount > 0 ? (
-              <Badge variant="warning">{openDisputesCount} Pending</Badge>
-            ) : (
-              <Badge variant="success">All Resolved</Badge>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-3 pt-3 text-xs">
-            {disputes.length === 0 ? (
-              <div className="py-8 text-center text-slate-400">No disputes reported.</div>
-            ) : (
-              disputes.map((d) => (
-                <div
-                  key={d.id}
-                  className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 shadow-2xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-slate-900">{d.category.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] text-slate-400 ml-2">Ticket #{d.id.slice(0, 8)}</span>
-                    </div>
-                    <Badge variant={d.status === 'RESOLVED' ? 'success' : d.status === 'REJECTED' ? 'neutral' : 'warning'}>
-                      {d.status}
-                    </Badge>
-                  </div>
-
-                  <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 italic">
-                    &ldquo;{d.description}&rdquo;
-                  </p>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] text-slate-400">
-                      Reported by {d.user_name || 'Customer'}
-                    </span>
-                    {d.status === 'OPEN' ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleOpenResolveModal(d)}
-                        className="text-xs"
-                      >
-                        Review & Resolve
-                      </Button>
-                    ) : (
-                      <span className="text-[11px] font-semibold text-emerald-700">
-                        Refund: ₹{d.refund_amount.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Dispute Resolution Modal */}
-      {selectedDispute && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">
-                  Resolve Dispute Ticket #{selectedDispute.id.slice(0, 8)}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  {selectedDispute.category.replace(/_/g, ' ')}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedDispute(null)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Decision</label>
-                <div className="flex gap-3">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="resolveStatus"
-                      value="RESOLVED"
-                      checked={resolveStatus === 'RESOLVED'}
-                      onChange={() => setResolveStatus('RESOLVED')}
-                    />
-                    <span className="font-medium text-emerald-800">Approve & Settle Refund</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="resolveStatus"
-                      value="REJECTED"
-                      checked={resolveStatus === 'REJECTED'}
-                      onChange={() => setResolveStatus('REJECTED')}
-                    />
-                    <span className="font-medium text-slate-700">Reject Claim</span>
-                  </label>
-                </div>
-              </div>
-
-              {resolveStatus === 'RESOLVED' && (
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">
-                    Simulated Refund Amount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    value={refundAmount}
-                    onChange={(e) => setRefundAmount(parseFloat(e.target.value) || 0)}
-                    className="w-full p-2 border rounded-xl text-xs"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Resolution Notes</label>
-                <textarea
-                  rows={3}
-                  value={resolutionNotes}
-                  onChange={(e) => setResolutionNotes(e.target.value)}
-                  className="w-full p-2 border rounded-xl text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <Button variant="outline" size="sm" onClick={() => setSelectedDispute(null)}>
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleConfirmResolve}
-                disabled={resolving}
-                className="bg-brand-600 hover:bg-brand-700 text-white"
-              >
-                {resolving ? 'Saving...' : 'Confirm Resolution'}
-              </Button>
-            </div>
-          </div>
-        </div>
       )}
-    </div>
+
+      {totalsAvailable && tab === 'groups' && (
+        <Card>
+          <CardHeader><CardTitle>Buying group activity</CardTitle><CardDescription>Monitor group status and review supplier quotations.</CardDescription></CardHeader>
+          <CardContent className="space-y-2">
+            {groups.length === 0 && <p className="text-sm text-slate-600">No buying groups have been created.</p>}
+            {groups.map((group) => (
+              <div key={group.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4 text-sm">
+                <div><p className="font-bold">{group.name}</p><p className="mt-1 text-slate-600">{group.neighborhood?.name || 'Neighborhood group'} · {group.members_count} households · Closes {formatDate(group.deadline)}</p></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={group.status === 'OPEN' ? 'success' : 'neutral'}>{statusLabel(group.status)}</Badge>
+                  <Button size="sm" variant="outline" onClick={() => setQuoteGroup(group)}><FileText aria-hidden="true" className="size-4" /> Review quotes</Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {totalsAvailable && tab === 'users' && (
+        <Card>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <div><CardTitle>Platform accounts</CardTitle><CardDescription>Review roles and account status.</CardDescription></div>
+            <input type="search" className="control w-full sm:w-64" aria-label="Search accounts" placeholder="Search accounts" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {filteredAccounts.length === 0 && <p className="text-sm text-slate-600">No accounts match your search.</p>}
+            {filteredAccounts.map((account) => (
+              <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4 text-sm">
+                <div className="min-w-0"><p className="break-words font-bold">{account.full_name}</p><p className="break-all text-slate-600">{account.email}</p></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="neutral">{statusLabel(account.role)}</Badge>
+                  <Badge variant={account.is_active ? 'success' : 'warning'}>{account.is_active ? 'Active' : 'Deactivated'}</Badge>
+                  {account.role !== 'ADMIN' && <Button variant="outline" size="sm" onClick={() => reviewAccount(account)}>{account.is_active ? 'Deactivate' : 'Reactivate'}</Button>}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {totalsAvailable && tab === 'suppliers' && (
+        <Card>
+          <CardHeader><CardTitle>Supplier directory</CardTitle><CardDescription>Review business profiles and the verification status on record.</CardDescription></CardHeader>
+          <CardContent className="space-y-2">
+            {suppliers.length === 0 && <p className="text-sm text-slate-600">No supplier profiles are available.</p>}
+            {suppliers.map((supplier) => (
+              <div key={supplier.id} className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-line p-4 text-sm">
+                <div className="min-w-0"><p className="break-words font-bold">{supplier.company_name}</p><p className="mt-1 text-slate-600">{supplier.city}</p>{supplier.description && <p className="mt-1 break-words text-slate-700">{supplier.description}</p>}</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={supplier.is_verified ? 'success' : 'warning'}>{supplier.is_verified ? 'Verified in the demo' : 'Unverified'}</Badge>
+                  <Button variant="outline" size="sm" onClick={() => reviewSupplier(supplier)}>{supplier.is_verified ? 'Withdraw verification' : 'Verify supplier'}</Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {totalsAvailable && tab === 'disputes' && (
+        <Card>
+          <CardHeader><CardTitle>Customer disputes</CardTitle><CardDescription>Review issues and record refund decisions in the simulation.</CardDescription></CardHeader>
+          <CardContent className="space-y-3">
+            {disputes.length === 0 && <p className="text-sm text-slate-600">No disputes have been reported.</p>}
+            {disputes.map((dispute) => (
+              <article key={dispute.id} className="space-y-3 rounded-xl border border-line p-4 text-sm">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div><h3 className="font-bold capitalize">{statusLabel(dispute.category)}</h3><p className="mt-1 text-slate-600">Ticket {dispute.id.slice(0, 8)} · {formatDate(dispute.created_at)}</p></div>
+                  <Badge variant={pendingDispute(dispute) ? 'warning' : 'neutral'}>{statusLabel(dispute.status)}</Badge>
+                </div>
+                <p className="break-words rounded-lg bg-canvas p-3 text-slate-700">{dispute.description}</p>
+                {pendingDispute(dispute) ? <Button size="sm" variant="outline" onClick={() => setSelectedDispute(dispute)}>Review dispute</Button> : <p className="text-slate-700">Simulated refund {formatCurrency(dispute.refund_amount)}</p>}
+              </article>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {review && <ReviewDialog review={review} onClose={() => setReview(null)} />}
+      <ActionDialog action={action} onClose={() => setAction(null)} />
+      {quoteGroup && <AdminQuotes group={quoteGroup} onClose={() => setQuoteGroup(null)} />}
+      {selectedOrder && (
+        <AdminFulfillment record={selectedOrder} onClose={() => setSelectedOrderId(null)} onUpdate={(updated) => {
+          setOrders((previous) => previous.map((entry) => entry.order.id === selectedOrder.order.id ? { ...entry, fulfillments: entry.fulfillments.map((item) => item.id === updated.id ? { ...item, ...updated, user_name: item.user_name } : item) } : entry))
+        }} />
+      )}
+      {selectedDispute && (
+        <ResolveDispute dispute={selectedDispute} onClose={() => setSelectedDispute(null)} onResolve={(updated) => {
+          setDisputes((previous) => previous.map((item) => item.id === updated.id ? updated : item))
+          setSelectedDispute(null)
+          notify('Dispute decision saved.')
+        }} />
+      )}
+    </Dashboard>
+  )
+}
+
+function AdminQuotes({ group, onClose }: { group: BuyingGroup; onClose: () => void }) {
+  const [quotes, setQuotes] = useState<SupplierQuotation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let current = true
+    api.getGroupQuotations(group.id)
+      .then((results) => { if (current) setQuotes(results) })
+      .catch(() => { if (current) setError('Supplier quotations could not be loaded.') })
+      .finally(() => { if (current) setLoading(false) })
+    return () => { current = false }
+  }, [group.id])
+
+  return (
+    <Modal isOpen title="Group quotations" description={group.name} onClose={onClose}>
+      {loading ? <PanelLoading label="Loading quotations" count={1} /> : error ? <PanelError message={error} /> : quotes.length ? (
+        <ul className="space-y-2">
+          {quotes.map((quote) => (
+            <li key={quote.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line p-3 text-sm">
+              <div><p className="font-bold">{quote.supplier_name ?? 'Supplier'}</p><p className="text-slate-600">Valid through {formatDate(quote.valid_until)}</p></div>
+              <div className="flex flex-wrap items-center gap-2"><strong>{formatCurrency(quote.total_quoted_price)}</strong><Badge variant="neutral">{statusLabel(quote.status)}</Badge></div>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-sm text-slate-600">This group has no recorded quotations.</p>}
+    </Modal>
+  )
+}
+
+function AdminFulfillment({ record, onClose, onUpdate }: { record: OrderRecord; onClose: () => void; onUpdate: (entry: MemberFulfillment) => void }) {
+  const [error, setError] = useState('')
+  const [savingId, setSavingId] = useState<string | null>(null)
+
+  async function update(entry: MemberFulfillment, status: string) {
+    setSavingId(entry.id)
+    setError('')
+    try {
+      onUpdate(await api.updateDeliveryStatus(record.order.id, entry.id, { status }))
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not update delivery.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  return (
+    <Modal isOpen title="Fulfillment tracking" description={record.group.name} size="lg" onClose={() => { if (!savingId) onClose() }}>
+      <div className="space-y-3">
+        {error && <PanelError message={error} />}
+        {record.fulfillments.length === 0 && <p className="text-sm text-slate-600">Household fulfillment records are created during simulated procurement.</p>}
+        {record.fulfillments.map((entry) => (
+          <div key={entry.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-line p-3 text-sm">
+            <div><p className="font-bold">{entry.user_name ?? 'Household'}</p><p className="mt-1 capitalize text-slate-600">{statusLabel(entry.fulfillment_type)}</p></div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="neutral">{statusLabel(entry.status)}</Badge>
+              {entry.fulfillment_type === 'HOME_DELIVERY' && entry.status === 'OUT_FOR_DELIVERY' && (
+                <Button size="sm" variant="outline" isLoading={savingId === entry.id} disabled={!!savingId} onClick={() => update(entry, 'DELIVERED')}>Mark delivered</Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+function ResolveDispute({ dispute, onClose, onResolve }: { dispute: OrderDispute; onClose: () => void; onResolve: (updated: OrderDispute) => void }) {
+  const [decision, setDecision] = useState<'RESOLVED' | 'REJECTED'>('RESOLVED')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function resolve(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const notes = String(data.get('notes')).trim()
+    if (!notes) {
+      setError('Add a note explaining the dispute decision.')
+      return
+    }
+    setError('')
+    setBusy(true)
+    try {
+      onResolve(await api.resolveDispute(dispute.id, {
+        status: decision,
+        resolution_notes: notes,
+        refund_amount: decision === 'RESOLVED' ? Number(data.get('refund')) : 0,
+      }))
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not save the decision.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={() => { if (!busy) onClose() }} title={`Review dispute ${dispute.id.slice(0, 8)}`} description="This decision applies to the demonstration only.">
+      <form onSubmit={resolve} className="space-y-4">
+        <p className="break-words rounded-lg bg-canvas p-3 text-sm">{dispute.description}</p>
+        <fieldset>
+          <legend className="text-sm font-bold">Decision</legend>
+          <div className="flex flex-wrap gap-x-4">
+            <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="decision" checked={decision === 'RESOLVED'} onChange={() => setDecision('RESOLVED')} /> Resolve claim</label>
+            <label className="flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="decision" checked={decision === 'REJECTED'} onChange={() => setDecision('REJECTED')} /> Reject claim</label>
+          </div>
+        </fieldset>
+        {decision === 'RESOLVED' && <Input type="number" name="refund" min="0" step=".01" label="Simulated refund amount (₹)" defaultValue={dispute.refund_amount} />}
+        <div><label htmlFor="resolution-notes" className="mb-1 block text-sm font-bold">Resolution notes</label><textarea id="resolution-notes" name="notes" required maxLength={1000} className="control w-full" rows={3} /></div>
+        {error && <PanelError message={error} />}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button type="submit" isLoading={busy}><CircleDollarSign aria-hidden="true" className="size-4" /> Save resolution</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function ReviewDialog({ review, onClose }: { review: ReviewAction; onClose: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const reason = String(new FormData(event.currentTarget).get('reason')).trim()
+    if (!reason) {
+      setError('Enter a reason for the audit record.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await review.submit(reason)
+      onClose()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not save the review.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal isOpen title={review.title} description={review.description} onClose={() => { if (!busy) onClose() }}>
+      <form className="space-y-4" onSubmit={submit}>
+        <div><label htmlFor="review-reason" className="mb-1 block text-sm font-bold">Reason for the audit record</label><textarea id="review-reason" className="control w-full" name="reason" required maxLength={500} rows={3} /></div>
+        {error && <PanelError message={error} />}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button type="submit" isLoading={busy}>{review.label}</Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
