@@ -54,3 +54,39 @@ def test_demo_login_endpoint(client: TestClient):
     assert data["token_type"] == "bearer"
     assert data["demo_mode"] is True
     assert data["user"]["email"] == "priya.customer@bulkshare.com"
+
+
+def test_unsigned_token_is_rejected_in_demo_mode(client: TestClient):
+    import base64
+    import json
+
+    def part(value: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+
+    unsigned_token = f"{part({'alg': 'none', 'typ': 'JWT'})}.{part({'sub': 'test-admin-uid', 'role': 'ADMIN'})}."
+    response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {unsigned_token}"},
+    )
+    assert response.status_code == 401
+
+
+def test_invalid_signature_is_rejected_in_demo_mode(client: TestClient):
+    import jwt
+    from datetime import datetime, timedelta, timezone
+
+    forged_token = jwt.encode(
+        {
+            "sub": "test-admin-uid",
+            "role": "ADMIN",
+            "iss": "bulk-share-demo",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+        },
+        "wrong-secret",
+        algorithm="HS256",
+    )
+    response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {forged_token}"},
+    )
+    assert response.status_code == 401
