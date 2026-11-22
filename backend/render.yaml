@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: bulk-share-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt && alembic upgrade head"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: DEMO_MODE
+        value: "true"
+      - key: CORS_ORIGINS
+        value: "https://bulk-share.vercel.app,http://localhost:5173"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: DEMO_JWT_SECRET
+        generateValue: true

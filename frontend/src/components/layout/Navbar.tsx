@@ -1,5 +1,5 @@
-import React from 'react'
-import { ShoppingBag, MapPin, User, LogOut, LayoutDashboard, ChevronDown } from 'lucide-react'
+import React, { useState } from 'react'
+import { ShoppingBag, MapPin, User, LogOut, LayoutDashboard, ChevronDown, Menu, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -19,6 +19,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
 }) => {
   const { user, logout } = useAuth()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const handleMobileNav = (view: string) => {
+    onNavigate(view)
+    setMobileMenuOpen(false)
+  }
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
@@ -145,9 +151,76 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </Button>
               </div>
             )}
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 lg:hidden focus:outline-hidden"
+              aria-label="Toggle mobile menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile Drawer */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden border-t border-slate-200 bg-white/95 backdrop-blur-md px-4 py-4 space-y-3 shadow-lg animate-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
+            <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+            <span>{user?.neighborhood?.name || 'Indiranagar Central'}</span>
+            <span className="text-slate-400">·</span>
+            <span className="text-slate-500">{user?.neighborhood?.postal_code || '560038'}</span>
+          </div>
+
+          <nav className="flex flex-col gap-1">
+            <button
+              onClick={() => handleMobileNav('landing')}
+              className={`px-3 py-2 text-left rounded-lg text-sm font-medium transition-colors ${
+                currentView === 'landing'
+                  ? 'text-brand-700 bg-brand-50 font-semibold'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              How It Works
+            </button>
+            <button
+              onClick={() => handleMobileNav('groups-preview')}
+              className="px-3 py-2 text-left rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Neighborhood Groups
+            </button>
+            <button
+              onClick={() => handleMobileNav('savings-calculator')}
+              className="px-3 py-2 text-left rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Wholesale Pricing
+            </button>
+          </nav>
+
+          {user && (
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <button
+                onClick={() => handleMobileNav('dashboard')}
+                className="text-xs font-semibold text-brand-700 hover:underline flex items-center gap-1.5"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Open Dashboard ({user.role})
+              </button>
+              <button
+                onClick={() => {
+                  logout()
+                  setMobileMenuOpen(false)
+                }}
+                className="text-xs text-rose-600 hover:underline flex items-center gap-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   )
 }

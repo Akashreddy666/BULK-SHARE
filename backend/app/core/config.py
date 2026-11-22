@@ -16,16 +16,25 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
+        "https://bulk-share.vercel.app",
     ]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
+        if isinstance(v, str):
+            if v == "*":
+                return ["*"]
+            if not v.startswith("["):
+                return [i.strip() for i in v.split(",") if i.strip()]
         elif isinstance(v, list):
             return v
-        return ["http://localhost:5173", "http://127.0.0.1:5173"]
+        return [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "https://bulk-share.vercel.app",
+        ]
 
     # Database configuration
     # Default to local SQLite with aiosqlite for zero-config local development and testing
