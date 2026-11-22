@@ -1,23 +1,11 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
-  ShoppingBag,
-  TrendingDown,
-  Users,
-  ShieldCheck,
-  Truck,
-  ArrowRight,
-  CheckCircle2,
-  Sparkles,
-  HelpCircle,
-  Store,
-  Layers,
-  ChevronRight,
-  Calculator,
+  BadgeCheck, ChevronDown, ClipboardList, FlaskConical, HandCoins, LockKeyhole, MapPin,
+  Minus, PackageCheck, Plus, Scale, ShoppingBag, Truck, UsersRound,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { formatCurrency } from '@/lib/utils'
+import { pantry, samplePackPrice, sampleTiers } from './landingCatalog'
 
 interface LandingPageProps {
   onOpenAuth: (mode: 'login' | 'register') => void
@@ -25,442 +13,224 @@ interface LandingPageProps {
   onNavigateToDashboard?: () => void
 }
 
-interface GroceryItem {
-  name: string
-  category: string
-  packSize: string
-  retailPrice: number
-  wholesalePrice: number
-  qty: number
+const steps = [
+  { icon: MapPin, title: 'Find your group', copy: 'Join an open neighborhood pool, use a private invite, or start a group of your own.' },
+  { icon: ClipboardList, title: 'Build your list', copy: 'Add the sealed packs your household needs and choose how flexible you are about brands.' },
+  { icon: UsersRound, title: 'Pool your demand', copy: 'The group combines compatible packs. Each product qualifies for volume pricing independently.' },
+  { icon: Scale, title: 'Compare and confirm', copy: 'Your organizer compares supplier quotes. You approve your items, fees and household total.' },
+  { icon: Truck, title: 'Choose how to receive it', copy: 'Select neighborhood pickup or home delivery and review the fee before you confirm.' },
+]
+
+const trust = [
+  { icon: PackageCheck, title: 'Sealed packs only', copy: 'Orders use entire manufacturer-sealed packs in the sizes shown in the catalog.' },
+  { icon: LockKeyhole, title: 'Private household lists', copy: 'Organizers see combined pack quantities. Household lists and addresses stay private.' },
+  { icon: BadgeCheck, title: 'Supplier verification', copy: 'The workflow requires supplier approval before a supplier can submit eligible quotations.' },
+  { icon: HandCoins, title: 'Costs shown upfront', copy: 'Review item prices, shared charges and pickup or delivery fees before you accept.' },
+]
+
+const questions = [
+  { question: 'Do I have to buy a wholesale-sized pack?', answer: 'You choose ordinary sealed retail packs from the catalog. The group combines pack counts to qualify for a volume price.' },
+  { question: 'What happens when a product misses the minimum?', answer: 'Qualification is checked separately for each product. If a product misses its minimum, it is excluded from the proposed order and shown in your breakdown.' },
+  { question: 'Can I choose my brand and fulfillment method?', answer: 'Yes. Set an exact or flexible brand preference and review the final pack before approving. You can select neighborhood pickup or home delivery and see the associated fee.' },
+  { question: 'Will I be charged for using the demo?', answer: 'Payments, procurement and fulfillment are simulated. The example prices use sample catalog data and do not represent live offers.' },
+]
+
+function scrollToCalculator() {
+  const section = document.getElementById('calculator')
+  section?.focus({ preventScroll: true })
+  section?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({
-  onOpenAuth,
-  onOpenDemoSwitcher,
-}) => {
-  // Interactive savings calculator state
-  const [groceries, setGroceries] = useState<GroceryItem[]>([
-    { name: 'Sona Masoori Rice', category: 'Rice', packSize: '5 kg sealed bag', retailPrice: 360, wholesalePrice: 280, qty: 2 },
-    { name: 'Refined Sunflower Oil', category: 'Oil', packSize: '5 L sealed can', retailPrice: 720, wholesalePrice: 590, qty: 1 },
-    { name: 'Premium Toor Dal', category: 'Dal', packSize: '2 kg sealed pack', retailPrice: 340, wholesalePrice: 265, qty: 2 },
-    { name: 'Refined Crystal Sugar', category: 'Sugar', packSize: '5 kg sealed bag', retailPrice: 240, wholesalePrice: 195, qty: 1 },
-    { name: 'Chakki Fresh Atta', category: 'Flour', packSize: '10 kg sealed bag', retailPrice: 480, wholesalePrice: 385, qty: 1 },
-  ])
+export function LandingPage({ onOpenAuth, onOpenDemoSwitcher, onNavigateToDashboard }: LandingPageProps) {
+  const [productIndex, setProductIndex] = useState(0)
+  const [householdPacks, setHouseholdPacks] = useState(2)
+  const [groupPacks, setGroupPacks] = useState(15)
+  const product = pantry[productIndex]
+  const totalPacks = Math.max(groupPacks, householdPacks)
+  const tier = [...sampleTiers].reverse().find((candidate) => totalPacks >= candidate.packs)
+  const retailTotal = product.retail * householdPacks
+  const groupTotal = tier ? samplePackPrice(product.retail, tier.rate) * householdPacks : null
+  const savings = groupTotal === null ? null : retailTotal - groupTotal
 
-  const updateQuantity = (index: number, newQty: number) => {
-    const updated = [...groceries]
-    updated[index].qty = Math.max(0, Math.min(10, newQty))
-    setGroceries(updated)
-  }
-
-  const retailTotal = groceries.reduce((sum, item) => sum + item.retailPrice * item.qty, 0)
-  const wholesaleTotal = groceries.reduce((sum, item) => sum + item.wholesalePrice * item.qty, 0)
-  const estimatedSavings = retailTotal - wholesaleTotal
-  const savingsPct = retailTotal > 0 ? Math.round((estimatedSavings / retailTotal) * 100) : 0
+  const start = onNavigateToDashboard ?? (() => onOpenAuth('register'))
 
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden pt-12 pb-20 md:pt-20 md:pb-28 gradient-hero border-b border-slate-200/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Left Column: Vision & Pitch */}
-            <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-100/80 border border-brand-200 text-brand-900 text-xs font-semibold">
-                <Sparkles className="w-3.5 h-3.5 text-brand-700" />
-                Community Grocery Purchasing Platform
+    <div>
+      <section id="landing" tabIndex={-1} aria-labelledby="hero-title" className="bg-canvas outline-none">
+        <div className="site-container grid gap-8 py-10 sm:py-14 lg:grid-cols-[.94fr_1.06fr] lg:items-center lg:gap-12 lg:py-[4.25rem]">
+          <div className="page-enter min-w-0">
+            <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-800">
+              <MapPin aria-hidden="true" className="size-4" /> Neighborhood grocery buying
+            </p>
+            <h1 id="hero-title" className="max-w-[11ch] font-display text-[clamp(2.9rem,6.2vw,5.5rem)] leading-[.99] tracking-[-.045em] text-brand-950">
+              Better grocery prices, <span className="text-brand-600">together.</span>
+            </h1>
+            <p className="mt-5 max-w-[29rem] text-base leading-relaxed text-slate-700 sm:text-lg">
+              Buy sealed pantry staples with your neighbors. Pool quantities, compare wholesale quotes and approve your own grocery total.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button size="lg" onClick={start}><ShoppingBag aria-hidden="true" className="size-[18px]" /> {onNavigateToDashboard ? 'Open dashboard' : 'Join a buying group'}</Button>
+              <a href="#how-it-works" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-brand-200 bg-white px-5 font-semibold text-brand-900 transition-colors hover:bg-brand-50">See how it works</a>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-5 text-sm font-semibold text-brand-800">
+              <span className="inline-flex items-center gap-2"><PackageCheck aria-hidden="true" className="size-4" /> Sealed grocery packs</span>
+              <span className="inline-flex items-center gap-2"><LockKeyhole aria-hidden="true" className="size-4" /> Private lists</span>
+            </div>
+          </div>
+
+          <figure className="relative isolate min-w-0 overflow-hidden rounded-[1.75rem] bg-brand-100 shadow-panel">
+            <picture>
+              <source media="(max-width: 640px)" srcSet="/pantry/hero-small.webp" />
+              <img src="/pantry/hero.webp" alt="Rice, lentils, flour and sunflower oil beside an olive canvas market bag" width="1440" height="960" fetchPriority="high" className="aspect-[4/3] w-full object-cover sm:aspect-[6/5]" />
+            </picture>
+            <figcaption className="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-2 text-xs font-semibold text-brand-950 shadow-panel sm:bottom-5 sm:left-5 sm:text-sm">
+              <ShoppingBag aria-hidden="true" className="size-4 text-brand-700" /> Everyday pantry essentials
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="how-it-works" tabIndex={-1} aria-labelledby="steps-title" className="border-y border-line bg-white py-12 outline-none sm:py-16">
+        <div className="site-container">
+          <h2 id="steps-title" className="section-title">How BULK SHARE works</h2>
+          <ol className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {steps.map(({ icon: Icon, title, copy }) => (
+              <li key={title} className="rounded-panel border border-line bg-canvas p-5">
+                <span className="icon-tile bg-white"><Icon aria-hidden="true" className="size-5" /></span>
+                <h3 className="mt-4 text-base font-bold tracking-tight">{title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{copy}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section id="calculator" tabIndex={-1} aria-labelledby="calculator-title" className="py-12 outline-none sm:py-16">
+        <div className="site-container">
+          <div className="mb-7">
+            <h2 id="calculator-title" className="section-title">Calculate your household savings</h2>
+            <p className="mt-2 max-w-2xl text-slate-700">See how the total packs in your group can change the price of a pantry staple.</p>
+          </div>
+          <div className="grid overflow-hidden rounded-[1.75rem] border border-line bg-white shadow-panel md:grid-cols-[1.2fr_1fr]">
+            <div className="space-y-6 p-5 sm:p-8">
+              <div>
+                <label htmlFor="savings-product" className="mb-2 block text-sm font-bold">Pantry staple</label>
+                <div className="relative">
+                  <select id="savings-product" value={productIndex} onChange={(event) => setProductIndex(Number(event.target.value))} className="control w-full appearance-none pr-10">
+                    {pantry.map((item, index) => <option key={item.id} value={index}>{item.name} · {item.pack}</option>)}
+                  </select>
+                  <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-3.5 size-4 text-brand-700" />
+                </div>
               </div>
-
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-slate-950 tracking-tight leading-[1.15]">
-                Buy Grocery Staples at <span className="text-brand-600 underline decoration-brand-300 decoration-wavy underline-offset-8">Wholesale Prices</span>. Together.
-              </h1>
-
-              <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed font-normal">
-                Households in the same neighborhood pool their grocery requirements for sealed staples like rice, oil, dal, sugar, and flour. Unlock tiered wholesale quotes with complete cart privacy.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
-                <Button
-                  size="lg"
-                  variant="primary"
-                  onClick={() => onOpenAuth('register')}
-                  className="w-full sm:w-auto shadow-lg shadow-brand-600/25 text-base"
-                >
-                  Join a Buying Group
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={onOpenDemoSwitcher}
-                  className="w-full sm:w-auto text-base"
-                >
-                  <Sparkles className="w-4 h-4 mr-2 text-amber-500" />
-                  Try Demo Personas
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold">Your household packs</p>
+                  <p className="mt-1 text-sm text-slate-600">{product.pack} per sealed pack</p>
+                </div>
+                <div role="group" aria-label="Household pack quantity" className="flex items-center gap-1 rounded-xl border border-line p-1">
+                  <button type="button" aria-label="Remove one household pack" disabled={householdPacks <= 1} onClick={() => setHouseholdPacks((value) => value - 1)} className="quantity-button"><Minus aria-hidden="true" className="size-4" /></button>
+                  <output aria-label="Household packs" className="w-8 text-center font-bold tabular-nums">{householdPacks}</output>
+                  <button type="button" aria-label="Add one household pack" disabled={householdPacks >= 10} onClick={() => setHouseholdPacks((value) => value + 1)} className="quantity-button"><Plus aria-hidden="true" className="size-4" /></button>
+                </div>
               </div>
-
-              {/* Trust & Key Features Metrics */}
-              <div className="pt-8 border-t border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
-                <div>
-                  <p className="text-2xl font-bold text-slate-900">20–35%</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Average Savings</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-slate-900">100%</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Sealed Packs Only</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-slate-900">Private</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Household Lists</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-brand-700">Bengaluru</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Indiranagar Central</p>
-                </div>
+              <div>
+                <label htmlFor="savings-group" className="flex flex-wrap justify-between gap-2 text-sm font-bold">
+                  Packs across the group <span className="tabular-nums text-brand-700">{totalPacks} packs</span>
+                </label>
+                <input id="savings-group" type="range" min={householdPacks} max={40} value={totalPacks} onChange={(event) => setGroupPacks(Number(event.target.value))} className="h-11 w-full accent-brand-700" />
+                <p className="text-sm text-slate-600">Includes your packs. Sample tiers start at 5, 15 and 30 packs per product.</p>
               </div>
             </div>
-
-            {/* Right Column: Live Teaser Card */}
-            <div className="lg:col-span-5">
-              <div className="glass-card rounded-2xl p-6 sm:p-7 shadow-xl shadow-slate-300/30 relative">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                  <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-brand-700">
-                      Live Group Snapshot
-                    </span>
-                    <h3 className="text-base font-bold text-slate-900">
-                      Indiranagar Essentials Group #1
-                    </h3>
-                  </div>
-                  <Badge variant="success">OPEN FOR ORDERS</Badge>
-                </div>
-
-                <div className="py-4 space-y-3.5">
-                  <div className="flex items-center justify-between text-xs text-slate-600">
-                    <span>Participating Households</span>
-                    <span className="font-semibold text-slate-900">14 families</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-slate-600">
-                    <span>Rice & Atta Pool</span>
-                    <span className="font-semibold text-brand-700">320 kg (Tier 2 Unlocked)</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-slate-600">
-                    <span>Cooking Oil Pool</span>
-                    <span className="font-semibold text-brand-700">85 Liters (Tier 3 Unlocked)</span>
-                  </div>
-
-                  {/* Progress bar towards Tier 3 */}
-                  <div className="pt-2">
-                    <div className="flex justify-between text-[11px] font-medium text-slate-500 mb-1">
-                      <span>Threshold Progress</span>
-                      <span className="text-brand-700 font-semibold">82% to Maximum Discount</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                      <div className="bg-gradient-to-r from-brand-500 to-emerald-600 h-2 rounded-full w-[82%]" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between bg-brand-50/60 -mx-6 -mb-6 p-5 rounded-b-2xl">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                      Estimated Family Savings
-                    </p>
-                    <p className="text-lg font-bold text-slate-900">
-                      ₹1,420 <span className="text-xs font-normal text-brand-700 font-semibold">(~24% off)</span>
-                    </p>
-                  </div>
-                  <Button size="sm" onClick={() => onOpenAuth('register')}>
-                    Join Group
-                  </Button>
-                </div>
+            <div className="flex flex-col justify-between gap-5 bg-brand-900 p-5 text-white sm:p-8">
+              <div aria-live="polite">
+                <p className="text-sm font-semibold text-brand-200">Estimated savings on this item</p>
+                <p key={savings} className="page-enter mt-1 font-display text-5xl tabular-nums text-limewash sm:text-6xl">
+                  {savings === null ? '—' : formatCurrency(savings)}
+                </p>
+                <p className="mt-2 text-sm text-brand-100">{tier ? `${100 - tier.rate}% below sample retail at the ${tier.packs}+ pack tier` : 'This item needs at least 5 group packs to qualify.'}</p>
               </div>
+              <dl className="space-y-3 border-t border-brand-600 pt-4 text-sm">
+                <div className="flex justify-between gap-3"><dt className="text-brand-100">Retail reference</dt><dd className="font-semibold tabular-nums">{formatCurrency(retailTotal)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-brand-100">Estimated group price</dt><dd className="font-semibold tabular-nums">{groupTotal === null ? 'Below minimum' : formatCurrency(groupTotal)}</dd></div>
+              </dl>
+              <p className="text-sm leading-relaxed text-brand-200">Illustrative catalog prices. Your final quote includes any shared charges and pickup or delivery fees.</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Interactive Savings Calculator */}
-      <section id="calculator" className="py-16 sm:py-24 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <Badge variant="brand" className="mb-3">
-              <Calculator className="w-3.5 h-3.5 mr-1" />
-              Wholesale vs Retail Pricing
-            </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
-              Calculate Your Household Savings
-            </h2>
-            <p className="text-sm sm:text-base text-slate-600 mt-3">
-              Adjust monthly staples to see real-world wholesale tier discounts compared to reference retail store prices.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Products Table */}
-            <div className="lg:col-span-8 bg-slate-50/70 rounded-2xl border border-slate-200 p-4 sm:p-6 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      <th className="pb-3">Staple Product</th>
-                      <th className="pb-3 text-center">Retail Price</th>
-                      <th className="pb-3 text-center">Wholesale Price</th>
-                      <th className="pb-3 text-center">Packs</th>
-                      <th className="pb-3 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200/70">
-                    {groceries.map((item, idx) => (
-                      <tr key={idx} className="group">
-                        <td className="py-3.5">
-                          <p className="font-semibold text-slate-900 text-sm">{item.name}</p>
-                          <p className="text-xs text-slate-500">{item.packSize}</p>
-                        </td>
-                        <td className="py-3.5 text-center text-slate-500 text-xs line-through">
-                          {formatCurrency(item.retailPrice)}
-                        </td>
-                        <td className="py-3.5 text-center font-bold text-brand-700 text-sm">
-                          {formatCurrency(item.wholesalePrice)}
-                        </td>
-                        <td className="py-3.5 text-center">
-                          <div className="inline-flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden shadow-2xs">
-                            <button
-                              onClick={() => updateQuantity(idx, item.qty - 1)}
-                              className="px-2.5 py-1 text-slate-600 hover:bg-slate-100 transition-colors font-bold"
-                            >
-                              -
-                            </button>
-                            <span className="w-8 text-center text-xs font-semibold">{item.qty}</span>
-                            <button
-                              onClick={() => updateQuantity(idx, item.qty + 1)}
-                              className="px-2.5 py-1 text-slate-600 hover:bg-slate-100 transition-colors font-bold"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3.5 text-right font-bold text-slate-900">
-                          {formatCurrency(item.wholesalePrice * item.qty)}
-                        </td>
-                      </tr>
+      <section aria-labelledby="pantry-title" className="border-y border-line bg-white py-12 sm:py-16">
+        <div className="site-container">
+          <h2 id="pantry-title" className="section-title">Everyday pantry staples</h2>
+          <p className="mt-2 text-slate-700">Sample sealed packs and wholesale volume pricing tiers.</p>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {pantry.map((item, index) => item.image && (
+              <article key={item.id} className="flex min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-white shadow-panel transition-shadow hover:shadow-md">
+                <img src={item.image} alt="" width="480" height="480" loading="lazy" decoding="async" className="aspect-[8/5] w-full bg-brand-50 object-cover" />
+                <div className="flex flex-1 flex-col p-4">
+                  <h3 className="text-lg font-bold tracking-tight text-brand-950">{item.name}</h3>
+                  <p className="mt-1 text-sm text-slate-600">{item.pack} sealed pack · {formatCurrency(item.retail)} retail</p>
+                  <dl className="my-4 space-y-2 border-y border-line py-3 text-sm">
+                    {sampleTiers.map(({ packs, rate }) => (
+                      <div key={packs} className="flex justify-between gap-2"><dt className="text-slate-700">{packs}+ packs · {100 - rate}% less</dt><dd className="font-bold tabular-nums text-brand-800">{formatCurrency(samplePackPrice(item.retail, rate))}</dd></div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Savings Summary Box */}
-            <div className="lg:col-span-4">
-              <Card className="border-brand-200 shadow-md">
-                <div className="p-6 bg-gradient-to-br from-brand-700 to-brand-900 text-white rounded-t-xl">
-                  <span className="text-xs uppercase tracking-wider text-brand-200 font-semibold">
-                    Monthly Savings Breakdown
-                  </span>
-                  <div className="mt-2 flex items-baseline justify-between">
-                    <span className="text-3xl font-extrabold">{formatCurrency(estimatedSavings)}</span>
-                    <span className="bg-brand-500/30 border border-brand-400/40 text-brand-100 px-2.5 py-1 rounded-full text-xs font-bold">
-                      {savingsPct}% Saved
-                    </span>
-                  </div>
-                  <p className="text-xs text-brand-200 mt-1">
-                    Money kept in your wallet by buying with neighbors
-                  </p>
+                  </dl>
+                  <Button variant="secondary" size="sm" className="mt-auto w-full" onClick={() => { setProductIndex(index); scrollToCalculator() }} aria-label={`Estimate savings for ${item.name}`}>Estimate savings</Button>
                 </div>
-
-                <CardContent className="p-6 space-y-4 text-xs">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Retail Store Equivalent:</span>
-                    <span className="font-semibold text-slate-900 line-through">
-                      {formatCurrency(retailTotal)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>BULK SHARE Wholesale Total:</span>
-                    <span className="font-bold text-brand-700 text-sm">
-                      {formatCurrency(wholesaleTotal)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Simulated Pickup Fee:</span>
-                    <span className="font-semibold text-emerald-600">FREE (Community Pickup)</span>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100">
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      * Wholesale rates reflect certified supplier quantity price tiers for sealed manufacturer packages.
-                    </p>
-                  </div>
-
-                  <Button className="w-full mt-2" onClick={() => onOpenAuth('register')}>
-                    Start Saving in Indiranagar
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Core Rules & Transparency */}
-      <section className="py-16 sm:py-24 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <Badge variant="brand" className="mb-3">
-              <ShieldCheck className="w-3.5 h-3.5 mr-1" />
-              Guaranteed Principles
-            </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
-              Built for Neighbor Trust & Complete Privacy
-            </h2>
-            <p className="text-sm sm:text-base text-slate-600 mt-3">
-              Unlike haphazard messaging groups, BULK SHARE enforces strict software rules ensuring fairness and security.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6 space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold">
-                  <PackageCheck className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-base text-slate-900">Sealed Packs Only</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Only manufacturer-sealed retail packs (1kg, 5kg, 5L cans). Never loose or repacked grains.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6 space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold">
-                  <Users className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-base text-slate-900">Private Household Lists</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Neighbors only see aggregate numbers. Your individual cart and exact home address stay 100% confidential.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6 space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-base text-slate-900">Independent Tiers</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Each product qualifies on its own quantity threshold. Non-qualifying products are transparently flagged.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6 space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-base text-slate-900">Explicit Confirmation</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  You review and approve the final chosen brand, supplier, and costs before atomic group order locking.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* How it Works (4 Steps) */}
-      <section id="how-it-works" className="py-16 sm:py-24 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <Badge variant="brand" className="mb-3">
-              Step-by-Step Flow
-            </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
-              How Neighborhood Group Purchasing Works
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
-            {[
-              {
-                step: '01',
-                title: 'Join or Create Group',
-                desc: 'Find an open group in your neighborhood (e.g. Indiranagar) or start one as an Organizer.',
-              },
-              {
-                step: '02',
-                title: 'Add Grocery Needs',
-                desc: 'Add sealed-pack quantities with exact brand preferences or flexible substitution approval.',
-              },
-              {
-                step: '03',
-                title: 'Wholesale Quotation',
-                desc: 'Verified suppliers submit bulk rates for aggregated quantities; the organizer picks the best offer.',
-              },
-              {
-                step: '04',
-                title: 'Confirm & Receive',
-                desc: 'Approve your household total, lock the purchase, and collect at local pickup or doorstep.',
-              },
-            ].map((st, i) => (
-              <div key={i} className="relative space-y-3">
-                <span className="text-4xl font-black text-brand-200 block font-mono">{st.step}</span>
-                <h3 className="font-bold text-slate-900 text-base">{st.title}</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">{st.desc}</p>
-              </div>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Evaluator Demo Personas CTA banner */}
-      <section className="py-16 bg-gradient-to-r from-brand-900 via-brand-800 to-slate-950 text-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-700/60 border border-brand-500/50 text-brand-200 text-xs font-medium">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            Designed for Instant Evaluation & Review
+      <section id="groups" tabIndex={-1} aria-labelledby="groups-title" className="py-12 outline-none sm:py-16">
+        <div className="site-container grid items-start gap-8 lg:grid-cols-[.85fr_1.15fr]">
+          <div>
+            <h2 id="groups-title" className="section-title">Buy as a neighborhood.</h2>
+            <p className="mt-3 max-w-md leading-relaxed text-slate-700">A few packs from each household can unlock a price tier for the group. Join a public pool nearby, use an invite, or create one for your community.</p>
+            <Button className="mt-5" onClick={start}>{onNavigateToDashboard ? 'Find buying groups' : 'Get started with groups'}</Button>
           </div>
-          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
-            Ready to explore all 4 user personas?
-          </h2>
-          <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto">
-            Switch effortlessly between Customer, Group Organizer, Wholesaler Supplier, and Admin views with one click.
-          </p>
-          <div className="pt-2">
-            <Button
-              size="lg"
-              variant="secondary"
-              onClick={onOpenDemoSwitcher}
-              className="bg-white text-slate-900 hover:bg-slate-100 font-bold border-none"
-            >
-              Open Demo Role Switcher
-            </Button>
+          <div id="rules" className="grid gap-3 sm:grid-cols-2">
+            {trust.map(({ icon: Icon, title, copy }) => (
+              <article key={title} className="rounded-panel border border-line bg-white p-5 shadow-panel">
+                <span className="icon-tile"><Icon aria-hidden="true" className="size-5" /></span>
+                <h3 className="mt-3 font-bold text-brand-950">{title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-slate-700">{copy}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" tabIndex={-1} aria-labelledby="faq-title" className="border-y border-line bg-white py-12 outline-none sm:py-16">
+        <div className="site-container grid gap-6 lg:grid-cols-[.85fr_1.15fr]">
+          <h2 id="faq-title" className="section-title">Common questions</h2>
+          <div className="divide-y divide-line border-y border-line">
+            {questions.map(({ question, answer }) => (
+              <details key={question} className="group">
+                <summary className="flex min-h-14 cursor-pointer items-center justify-between gap-4 rounded-sm py-3 font-bold text-brand-950">
+                  {question}
+                  <ChevronDown aria-hidden="true" className="size-5 shrink-0 text-brand-700 transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="page-enter pb-4 pr-7 leading-relaxed text-slate-700">{answer}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="start-title" className="site-container py-10 sm:py-14">
+        <div className="flex flex-wrap items-center justify-between gap-6 rounded-[1.75rem] bg-limewash p-6 sm:p-9">
+          <div>
+            <h2 id="start-title" className="section-title">Ready to shop together?</h2>
+            <p className="mt-2 text-brand-900">Start with a neighborhood buying group or explore the simulated shopping flow.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={start}>{onNavigateToDashboard ? 'Open dashboard' : 'Get started'}</Button>
+            <Button variant="outline" onClick={onOpenDemoSwitcher}><FlaskConical aria-hidden="true" className="size-4" /> Try demo personas</Button>
           </div>
         </div>
       </section>
     </div>
-  )
-}
-
-function PackageCheck(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m16 16 2 2 4-4" />
-      <path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14" />
-      <path d="m7.5 4.27 9 5.15" />
-      <polyline points="3.29 7 12 12 20.71 7" />
-      <line x1="12" x2="12" y1="22" y2="12" />
-    </svg>
   )
 }

@@ -1,52 +1,37 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { LandingPage } from '@/pages/LandingPage'
 import { DemoBanner } from '@/components/layout/DemoBanner'
 
-describe('LandingPage & Components Smoke Tests', () => {
-  it('renders the Public Demo Mode disclaimer banner', () => {
+function renderLanding() {
+  render(<LandingPage onOpenAuth={vi.fn()} onOpenDemoSwitcher={vi.fn()} />)
+}
+
+describe('Landing page', () => {
+  it('renders the public demonstration notice', () => {
     render(<DemoBanner />)
-    expect(screen.getByText(/Public Demo Mode/i)).toBeInTheDocument()
+    expect(screen.getByText(/Public demo mode/i)).toBeInTheDocument()
     expect(screen.getByText(/Sample grocery data & simulated transactions only/i)).toBeInTheDocument()
   })
 
-  it('renders the Hero headline and key value propositions', () => {
-    const mockOpenAuth = vi.fn()
-    const mockOpenDemo = vi.fn()
-
-    render(
-      <LandingPage
-        onOpenAuth={mockOpenAuth}
-        onOpenDemoSwitcher={mockOpenDemo}
-      />
-    )
-
-    expect(screen.getByText(/Buy Grocery Staples at/i)).toBeInTheDocument()
-    expect(screen.getByText(/Wholesale Prices/i)).toBeInTheDocument()
-    expect(screen.getByText(/Calculate Your Household Savings/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/Sealed Packs Only/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Private Household Lists/i).length).toBeGreaterThan(0)
+  it('explains the group-buying flow and household privacy', () => {
+    renderLanding()
+    expect(screen.getByRole('heading', { level: 1, name: /Better grocery prices, together/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Calculate your household savings/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Sealed packs only/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Private household lists/i })).toBeInTheDocument()
   })
 
-  it('interactively updates calculated savings when pack quantities change', () => {
-    const mockOpenAuth = vi.fn()
-    const mockOpenDemo = vi.fn()
+  it('recalculates the household total at the selected tier and handles ineligible quantities', () => {
+    renderLanding()
+    const calculator = within(screen.getByRole('region', { name: /Calculate your household savings/i }))
+    expect(calculator.getByText('₹158.4')).toBeInTheDocument()
+    fireEvent.click(calculator.getByRole('button', { name: /Add one household pack/i }))
+    expect(calculator.getByText('₹237.6')).toBeInTheDocument()
 
-    render(
-      <LandingPage
-        onOpenAuth={mockOpenAuth}
-        onOpenDemoSwitcher={mockOpenDemo}
-      />
-    )
-
-    // Find '+' buttons to increment quantities
-    const plusButtons = screen.getAllByRole('button', { name: '+' })
-    expect(plusButtons.length).toBeGreaterThan(0)
-
-    // Increment rice quantity
-    fireEvent.click(plusButtons[0])
-
-    // Verify savings and total recalculations exist
-    expect(screen.getByText(/Monthly Savings Breakdown/i)).toBeInTheDocument()
+    fireEvent.change(calculator.getByRole('slider'), { target: { value: '4' } })
+    expect(calculator.getByText('Below minimum')).toBeInTheDocument()
+    fireEvent.change(calculator.getByRole('slider'), { target: { value: '5' } })
+    expect(calculator.getByText('₹162')).toBeInTheDocument()
   })
 })

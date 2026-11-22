@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { DemoBanner } from '@/components/layout/DemoBanner'
 import { Navbar } from '@/components/layout/Navbar'
@@ -13,7 +13,8 @@ import { AdminDashboard } from '@/pages/dashboards/AdminDashboard'
 
 const AppContent: React.FC = () => {
   const { user } = useAuth()
-  const [currentView, setCurrentView] = useState<string>('landing')
+  const [currentView, setCurrentView] = useState<'landing' | 'dashboard'>('landing')
+  const [navigation, setNavigation] = useState({ target: '', sequence: 0 })
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false)
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>('login')
   const [demoSwitcherOpen, setDemoSwitcherOpen] = useState<boolean>(false)
@@ -27,10 +28,24 @@ const AppContent: React.FC = () => {
     setDemoSwitcherOpen(true)
   }
 
-  const handleNavigate = (view: string) => {
-    setCurrentView(view)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  const handleNavigate = (target: string) => {
+    setCurrentView(target === 'dashboard' ? 'dashboard' : 'landing')
+    setNavigation((previous) => ({ target, sequence: previous.sequence + 1 }))
   }
+
+  useEffect(() => {
+    if (!navigation.target) return
+    const element = document.getElementById(navigation.target)
+    if (element) {
+      element.focus({ preventScroll: true })
+      element.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+    } else {
+      window.scrollTo({ top: 0 })
+      document.getElementById('main-content')?.focus({ preventScroll: true })
+    }
+  }, [navigation])
+
+  const openDashboard = () => handleNavigate('dashboard')
 
   const renderDashboard = () => {
     if (!user) {
@@ -38,7 +53,7 @@ const AppContent: React.FC = () => {
         <LandingPage
           onOpenAuth={handleOpenAuth}
           onOpenDemoSwitcher={handleOpenDemoSwitcher}
-          onNavigateToDashboard={() => setCurrentView('dashboard')}
+          onNavigateToDashboard={openDashboard}
         />
       )
     }
@@ -58,7 +73,8 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900">
+    <div className="flex min-h-screen flex-col">
+      <a href="#main-content" className="sr-only z-50 rounded-xl bg-white px-4 py-3 font-bold text-ink focus:not-sr-only focus:absolute focus:left-4 focus:top-4">Skip to content</a>
       <DemoBanner />
       <Navbar
         onOpenAuth={handleOpenAuth}
@@ -67,19 +83,19 @@ const AppContent: React.FC = () => {
         onNavigate={handleNavigate}
       />
 
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
         {currentView === 'dashboard' ? (
           renderDashboard()
         ) : (
           <LandingPage
             onOpenAuth={handleOpenAuth}
             onOpenDemoSwitcher={handleOpenDemoSwitcher}
-            onNavigateToDashboard={() => setCurrentView('dashboard')}
+            onNavigateToDashboard={user ? openDashboard : undefined}
           />
         )}
       </main>
 
-      <Footer />
+      <Footer onNavigate={handleNavigate} />
 
       {/* Auth Modal */}
       <AuthModal
@@ -87,14 +103,14 @@ const AppContent: React.FC = () => {
         onClose={() => setAuthModalOpen(false)}
         initialMode={authInitialMode}
         onOpenDemoSwitcher={handleOpenDemoSwitcher}
-        onSuccess={() => setCurrentView('dashboard')}
+        onSuccess={openDashboard}
       />
 
       {/* Evaluator Demo Role Switcher */}
       <DemoRoleSwitcher
         isOpen={demoSwitcherOpen}
         onClose={() => setDemoSwitcherOpen(false)}
-        onNavigateToDashboard={() => setCurrentView('dashboard')}
+        onNavigateToDashboard={openDashboard}
       />
     </div>
   )
