@@ -3,7 +3,7 @@ import { ConfirmationRound } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 
 interface ConfirmationRoundPanelProps {
   round: ConfirmationRound | null
@@ -80,7 +80,7 @@ export const ConfirmationRoundPanel: React.FC<ConfirmationRoundPanelProps> = ({
       <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-100">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-lg font-bold text-stone-900">
                 Confirmation Round {round.round_number} ({round.status})
               </h3>
@@ -97,7 +97,7 @@ export const ConfirmationRoundPanel: React.FC<ConfirmationRoundPanelProps> = ({
 
           {/* Organizer Lock / Recalculate Actions */}
           {isOrganizer && round.status === 'OPEN' && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {hasRejections && isRound1 && (
                 <Button
                   variant="outline"
@@ -130,21 +130,21 @@ export const ConfirmationRoundPanel: React.FC<ConfirmationRoundPanelProps> = ({
 
         {/* Progress Bar & KPI Cards */}
         <div className="space-y-2">
-          <div className="flex justify-between text-xs font-semibold text-stone-600">
+          <div className="flex flex-wrap justify-between gap-2 text-sm font-semibold text-stone-600">
             <span>Member Approval Progress</span>
             <span>
               {round.confirmed_count} of {round.total_members} members approved ({progressPercent}%)
             </span>
           </div>
-          <div className="w-full bg-stone-200 rounded-full h-3 overflow-hidden">
+          <div role="progressbar" aria-label="Member approval progress" aria-valuenow={progressPercent} className="h-3 w-full overflow-hidden rounded-full bg-brand-100">
             <div
-              className="bg-emerald-600 h-3 rounded-full transition-all duration-500"
+              className="progress-fill h-3 rounded-full bg-brand-700"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 text-center pt-2">
+        <div className="grid gap-2 pt-2 text-center sm:grid-cols-3">
           <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-100">
             <span className="text-[11px] font-semibold text-emerald-800 uppercase">Confirmed (Accepted)</span>
             <span className="text-xl font-bold text-emerald-900 block mt-0.5">{round.confirmed_count}</span>
@@ -160,55 +160,6 @@ export const ConfirmationRoundPanel: React.FC<ConfirmationRoundPanelProps> = ({
         </div>
       </div>
 
-      {/* Member Approvals Table */}
-      <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-stone-200 bg-stone-50/70 flex items-center justify-between">
-          <h4 className="font-bold text-stone-900 text-sm">Household Allocation Approvals</h4>
-          <span className="text-xs text-stone-500">Individual Household Privacy Protected</span>
-        </div>
-
-        <div className="divide-y divide-stone-100">
-          {round.confirmations.map((c, idx) => (
-            <div key={c.id} className="p-4 flex items-center justify-between gap-4 hover:bg-stone-50/50">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-stone-900">
-                    {c.user_name || `Household #${idx + 1}`}
-                  </span>
-                  <Badge
-                    variant={
-                      c.status === 'ACCEPTED'
-                        ? 'success'
-                        : c.status === 'REJECTED'
-                        ? 'danger'
-                        : 'warning'
-                    }
-                  >
-                    {c.status}
-                  </Badge>
-                </div>
-                <p className="text-xs text-stone-500">
-                  Fulfillment: <strong className="text-stone-700">{c.fulfillment_preference}</strong>
-                  {c.confirmed_at && ` • Confirmed: ${formatDate(c.confirmed_at)}`}
-                </p>
-                {c.rejection_reason && (
-                  <p className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded mt-1 inline-block">
-                    Reason: {c.rejection_reason}
-                  </p>
-                )}
-              </div>
-
-              <div className="text-right">
-                <span className="text-xs text-stone-500 block">Allocated Wholesale Cost</span>
-                <span className="text-sm font-bold text-stone-900 block">{formatCurrency(c.total_household_cost)}</span>
-                <span className="text-[11px] text-emerald-700 font-semibold block">
-                  Saves {formatCurrency(c.total_household_savings)}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }

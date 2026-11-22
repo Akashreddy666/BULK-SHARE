@@ -86,7 +86,6 @@ export const HubPickupDesk: React.FC<HubPickupDeskProps> = ({ groupOrderId, grou
   const filtered = fulfillments.filter(
     (f) =>
       f.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.pickup_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       f.status.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -121,7 +120,7 @@ export const HubPickupDesk: React.FC<HubPickupDeskProps> = ({ groupOrderId, grou
           Scan / Enter Customer Verification Code
         </div>
 
-        <form onSubmit={handleVerifyCode} className="flex gap-2">
+        <form onSubmit={handleVerifyCode} className="flex flex-wrap gap-2">
           <input
             type="text"
             value={inputCode}
@@ -158,7 +157,7 @@ export const HubPickupDesk: React.FC<HubPickupDeskProps> = ({ groupOrderId, grou
 
       {/* Roster & Search */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
             Household Allocation Roster ({fulfillments.length})
           </h4>
@@ -168,7 +167,8 @@ export const HubPickupDesk: React.FC<HubPickupDeskProps> = ({ groupOrderId, grou
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search member or PIN..."
+              aria-label="Search fulfillment by member name"
+              placeholder="Search by member name"
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-hidden focus:border-brand-500"
             />
           </div>
@@ -188,9 +188,7 @@ export const HubPickupDesk: React.FC<HubPickupDeskProps> = ({ groupOrderId, grou
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-slate-900">{f.user_name || 'Member'}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      PIN: {f.pickup_code || 'N/A (Delivery)'}
-                    </span>
+
                   </div>
                   <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
                     {f.fulfillment_type === 'PICKUP' ? (
@@ -201,7 +199,7 @@ export const HubPickupDesk: React.FC<HubPickupDeskProps> = ({ groupOrderId, grou
                     ) : (
                       <>
                         <Truck className="w-3 h-3 text-sky-600" />
-                        <span>{f.delivery_address || 'Home Delivery'}</span>
+                        <span>Home delivery</span>
                       </>
                     )}
                   </p>

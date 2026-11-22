@@ -36,6 +36,14 @@ class MemberConfirmationRead(BaseModel):
     created_at: datetime
 
 
+class HouseholdProposalItem(BaseModel):
+    variant_id: str
+    variant_name: str
+    pack_count: int
+    price_per_pack: float
+    line_total: float
+
+
 class ConfirmationRoundRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +58,8 @@ class ConfirmationRoundRead(BaseModel):
     confirmed_count: int = 0
     rejected_count: int = 0
     pending_count: int = 0
+    home_delivery_surcharge: float = 0
+    household_items: List[HouseholdProposalItem] = []
     confirmations: List[MemberConfirmationRead] = []
     selected_quotation: Optional[SupplierQuotationRead] = None
     created_at: datetime

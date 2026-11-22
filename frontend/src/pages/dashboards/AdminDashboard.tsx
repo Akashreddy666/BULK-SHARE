@@ -10,11 +10,12 @@ import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { api } from '@/services/api'
-import type { BuyingGroup, GroupOrder, GroupOrderPaymentSummary, MemberFulfillment, OrderDispute, ProcurementOrder, SupplierProfile, SupplierQuotation } from '@/types'
+import type { AdminAccount, BuyingGroup, GroupOrder, GroupOrderPaymentSummary, MemberFulfillment, OrderDispute, ProcurementOrder, SupplierProfile, SupplierQuotation } from '@/types'
 
 const sections = [
   { id: 'orders', label: 'Procurement & payments', icon: Truck },
   { id: 'groups', label: 'Buying groups', icon: Users },
+  { id: 'users', label: 'Accounts', icon: ShieldCheck },
   { id: 'suppliers', label: 'Suppliers', icon: Store },
   { id: 'disputes', label: 'Disputes', icon: AlertCircle },
 ] as const
@@ -22,6 +23,13 @@ const sections = [
 const orderedStatuses = ['LOCKED', 'PROCUREMENT', 'FULFILLMENT', 'COMPLETED']
 const pendingDispute = (dispute: OrderDispute) => ['OPEN', 'UNDER_REVIEW'].includes(dispute.status)
 const statusLabel = (value: string) => value.toLowerCase().replace(/_/g, ' ')
+
+interface ReviewAction {
+  title: string
+  description: string
+  label: string
+  submit: (reason: string) => Promise<void>
+}
 
 interface OrderRecord {
   group: BuyingGroup
@@ -34,6 +42,9 @@ interface OrderRecord {
 export function AdminDashboard() {
   const notify = useToast()
   const [tab, setTab] = useState<typeof sections[number]['id']>('orders')
+  const [review, setReview] = useState<ReviewAction | null>(null)
+  const [accounts, setAccounts] = useState<AdminAccount[]>([])
+  const [accountSearch, setAccountSearch] = useState('')
   const [groups, setGroups] = useState<BuyingGroup[]>([])
   const [suppliers, setSuppliers] = useState<SupplierProfile[]>([])
   const [orders, setOrders] = useState<OrderRecord[]>([])
@@ -50,7 +61,7 @@ export function AdminDashboard() {
     setLoading(true)
     setLoadError('')
     try {
-      const [allGroups, allSuppliers, allDisputes] = await Promise.all([api.getGroups(), api.getSuppliers(), api.getAdminDisputes()])
+      const [allGroups, allSuppliers, allDisputes, allAccounts] = await Promise.all([api.getGroups(), api.getSuppliers(), api.getAdminDisputes(), api.getAdminUsers()])
       const records = await Promise.all(allGroups.filter((group) => orderedStatuses.includes(group.status)).map(async (group) => {
         const order = await api.getGroupOrder(group.id)
         if (!order) return null
@@ -61,6 +72,7 @@ export function AdminDashboard() {
         ])
         return { group, order, procurement, payment, fulfillments }
       }))
+      setAccounts(allAccounts)
       setGroups(allGroups)
       setSuppliers(allSuppliers)
       setDisputes(allDisputes)
@@ -87,6 +99,36 @@ export function AdminDashboard() {
     })
   }
 
+  function reviewAccount(account: AdminAccount) {
+    const active = !account.is_active
+    setReview({
+      title: active ? 'Reactivate account?' : 'Deactivate account?',
+      description: account.email,
+      label: active ? 'Reactivate account' : 'Deactivate account',
+      submit: async (reason) => {
+        const updated = await api.updateAccountStatus(account.id, active, reason)
+        setAccounts((previous) => previous.map((item) => item.id === updated.id ? updated : item))
+        notify(active ? 'Account reactivated.' : 'Account deactivated.')
+      },
+    })
+  }
+
+  function reviewSupplier(supplier: SupplierProfile) {
+    const verified = !supplier.is_verified
+    setReview({
+      title: verified ? 'Verify this supplier?' : 'Withdraw supplier verification?',
+      description: `${supplier.company_name} · ${supplier.city}`,
+      label: verified ? 'Verify supplier' : 'Withdraw verification',
+      submit: async (reason) => {
+        const updated = await api.reviewSupplier(supplier.id, verified, reason)
+        setSuppliers((previous) => previous.map((item) => item.id === updated.id ? updated : item))
+        notify(verified ? 'Supplier verified for the demo.' : 'Supplier verification withdrawn.')
+      },
+    })
+  }
+
+  const query = accountSearch.trim().toLowerCase()
+  const filteredAccounts = accounts.filter((account) => [account.full_name, account.email, account.role].some((value) => value.toLowerCase().includes(query)))
   const openDisputes = disputes.filter(pendingDispute).length
   const totalsAvailable = !loading && !loadError
 
@@ -154,6 +196,28 @@ export function AdminDashboard() {
         </Card>
       )}
 
+      {totalsAvailable && tab === 'users' && (
+        <Card>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <div><CardTitle>Platform accounts</CardTitle><CardDescription>Review roles and account status.</CardDescription></div>
+            <input type="search" className="control w-full sm:w-64" aria-label="Search accounts" placeholder="Search accounts" value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {filteredAccounts.length === 0 && <p className="text-sm text-slate-600">No accounts match your search.</p>}
+            {filteredAccounts.map((account) => (
+              <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4 text-sm">
+                <div className="min-w-0"><p className="break-words font-bold">{account.full_name}</p><p className="break-all text-slate-600">{account.email}</p></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="neutral">{statusLabel(account.role)}</Badge>
+                  <Badge variant={account.is_active ? 'success' : 'warning'}>{account.is_active ? 'Active' : 'Deactivated'}</Badge>
+                  {account.role !== 'ADMIN' && <Button variant="outline" size="sm" onClick={() => reviewAccount(account)}>{account.is_active ? 'Deactivate' : 'Reactivate'}</Button>}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {totalsAvailable && tab === 'suppliers' && (
         <Card>
           <CardHeader><CardTitle>Supplier directory</CardTitle><CardDescription>Review business profiles and the verification status on record.</CardDescription></CardHeader>
@@ -162,7 +226,10 @@ export function AdminDashboard() {
             {suppliers.map((supplier) => (
               <div key={supplier.id} className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-line p-4 text-sm">
                 <div className="min-w-0"><p className="break-words font-bold">{supplier.company_name}</p><p className="mt-1 text-slate-600">{supplier.city}</p>{supplier.description && <p className="mt-1 break-words text-slate-700">{supplier.description}</p>}</div>
-                <Badge variant={supplier.is_verified ? 'success' : 'warning'}>{supplier.is_verified ? 'Verified in the demo' : 'Verification pending'}</Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={supplier.is_verified ? 'success' : 'warning'}>{supplier.is_verified ? 'Verified in the demo' : 'Unverified'}</Badge>
+                  <Button variant="outline" size="sm" onClick={() => reviewSupplier(supplier)}>{supplier.is_verified ? 'Withdraw verification' : 'Verify supplier'}</Button>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -188,6 +255,7 @@ export function AdminDashboard() {
         </Card>
       )}
 
+      {review && <ReviewDialog review={review} onClose={() => setReview(null)} />}
       <ActionDialog action={action} onClose={() => setAction(null)} />
       {quoteGroup && <AdminQuotes group={quoteGroup} onClose={() => setQuoteGroup(null)} />}
       {selectedOrder && (
@@ -318,6 +386,43 @@ function ResolveDispute({ dispute, onClose, onResolve }: { dispute: OrderDispute
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button type="submit" isLoading={busy}><CircleDollarSign aria-hidden="true" className="size-4" /> Save resolution</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function ReviewDialog({ review, onClose }: { review: ReviewAction; onClose: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const reason = String(new FormData(event.currentTarget).get('reason')).trim()
+    if (!reason) {
+      setError('Enter a reason for the audit record.')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await review.submit(reason)
+      onClose()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not save the review.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal isOpen title={review.title} description={review.description} onClose={() => { if (!busy) onClose() }}>
+      <form className="space-y-4" onSubmit={submit}>
+        <div><label htmlFor="review-reason" className="mb-1 block text-sm font-bold">Reason for the audit record</label><textarea id="review-reason" className="control w-full" name="reason" required maxLength={500} rows={3} /></div>
+        {error && <PanelError message={error} />}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button type="submit" isLoading={busy}>{review.label}</Button>
         </div>
       </form>
     </Modal>

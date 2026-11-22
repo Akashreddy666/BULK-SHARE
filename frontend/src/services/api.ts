@@ -1,5 +1,6 @@
 import {
   HealthResponse,
+  AdminAccount,
   Neighborhood,
   User,
   BuyingGroup,
@@ -113,6 +114,19 @@ export const api = {
     request<{ access_token: string; user: User; demo_mode: boolean }>('/users/demo-login', {
       method: 'POST',
       body: JSON.stringify({ role, email }),
+    }),
+
+  // Administration
+  getAdminUsers: () => request<AdminAccount[]>('/admin/users'),
+  updateAccountStatus: (id: string, is_active: boolean, reason: string) =>
+    request<AdminAccount>(`/admin/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active, reason }),
+    }),
+  reviewSupplier: (id: string, is_verified: boolean, reason: string) =>
+    request<SupplierProfile>(`/admin/suppliers/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ is_verified, reason }),
     }),
 
   // Groups

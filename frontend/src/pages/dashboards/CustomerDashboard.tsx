@@ -223,9 +223,9 @@ export function CustomerDashboard({ onOpenOrganizer }: { onOpenOrganizer: () => 
         </div>
         {/* Content based on Active Tab */}
         {groupError ? <PanelError message={groupError} onRetry={loadGroups} /> : activeTab === 'orders' ? (
-          isOrdersLoading || isLoading ? (
+          (isOrdersLoading && userOrders.length === 0) || isLoading ? (
             <PanelLoading label="Loading orders" />
-          ) : orderError ? (
+          ) : orderError && userOrders.length === 0 ? (
             <PanelError message={orderError} onRetry={loadOrdersData} />
           ) : userOrders.length === 0 ? (
             <Card>
@@ -239,6 +239,7 @@ export function CustomerDashboard({ onOpenOrganizer }: { onOpenOrganizer: () => 
             </Card>
           ) : (
             <div className="space-y-6">
+              {orderError && <PanelError message={orderError} onRetry={loadOrdersData} />}
               {userOrders.map((item) => (
                 <PickupPassCard
                   key={item.order.id}
@@ -312,6 +313,7 @@ export function CustomerDashboard({ onOpenOrganizer }: { onOpenOrganizer: () => 
       />
 
       <GroupDetailModal
+        key={selectedGroup?.id}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         group={selectedGroup}
@@ -343,6 +345,8 @@ export function CustomerDashboard({ onOpenOrganizer }: { onOpenOrganizer: () => 
 
       {confirmGroup && (
         <MemberConfirmationModal
+          key={confirmRound?.id}
+          myConfirmation={confirmRound?.confirmations.find((entry) => entry.user_id === user?.id)}
           isOpen={isConfirmOpen}
           onClose={() => setIsConfirmOpen(false)}
           groupId={confirmGroup.id}
@@ -365,18 +369,18 @@ export function CustomerDashboard({ onOpenOrganizer }: { onOpenOrganizer: () => 
 
       {catalogGroup && (
         <ProductCatalogModal
+          key={catalogGroup.id}
           isOpen={isCatalogOpen}
           onClose={() => { setIsCatalogOpen(false); setSavingsRevision((value) => value + 1) }}
           groupId={catalogGroup.id}
           groupName={catalogGroup.name}
-          onItemAdded={() => {
-            // refresh
-          }}
+          onItemAdded={() => setSavingsRevision((value) => value + 1)}
         />
       )}
 
       {listGroup && (
         <HouseholdGroceryListModal
+          key={listGroup.id}
           isOpen={isListOpen}
           onClose={() => { setIsListOpen(false); setSavingsRevision((value) => value + 1) }}
           groupId={listGroup.id}

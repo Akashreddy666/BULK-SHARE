@@ -45,6 +45,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false)
   const [invitation, setInvitation] = useState<GroupInvitation | null>(null)
   const [copied, setCopied] = useState(false)
+  const [confirmLeaving, setConfirmLeaving] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,9 +79,10 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
 
   const handleCopyToken = () => {
     if (!invitation) return
-    navigator.clipboard.writeText(invitation.token)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    navigator.clipboard.writeText(invitation.token).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => setError('Could not copy automatically. You can select and copy the displayed code.'))
   }
 
   const handleJoin = async () => {
@@ -101,10 +103,6 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
   }
 
   const handleLeave = async () => {
-    if (!window.confirm('Are you sure you want to leave this group? Your items will be removed.')) {
-      return
-    }
-
     setIsLeaving(true)
     setError(null)
     try {
@@ -118,6 +116,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
         setError('Failed to leave group.')
       }
     } finally {
+      setConfirmLeaving(false)
       setIsLeaving(false)
     }
   }
@@ -125,14 +124,14 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => { if (!isLeaving) { setConfirmLeaving(false); onClose() } }}
       title={group.name}
       description={`Buying group in ${group.neighborhood?.name || 'Local Neighborhood'}`}
       size="md"
     >
-      <div className="space-y-4 pt-1 text-xs">
+      <div className="space-y-4 text-sm">
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-start gap-2">
+          <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -204,7 +203,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
         {/* Organizer Section: Invite Generator */}
         {isOrganizer && (
           <div className="p-3.5 rounded-xl border border-brand-200 bg-brand-50/50 space-y-2.5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h5 className="font-bold text-brand-900 flex items-center gap-1.5">
                   <Share2 className="w-4 h-4 text-brand-600" />
@@ -229,7 +228,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
 
             {invitation && (
               <div className="pt-2 border-t border-brand-100 flex items-center justify-between gap-2">
-                <code className="text-xs font-mono font-bold bg-white px-2.5 py-1 rounded border border-brand-200 text-brand-900">
+                <code className="min-w-0 break-all text-xs font-mono font-bold bg-white px-2.5 py-1 rounded border border-brand-200 text-brand-900">
                   {invitation.token}
                 </code>
                 <Button
@@ -255,13 +254,23 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
           </div>
         )}
 
+        {confirmLeaving && (
+          <div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-3" role="group" aria-label="Confirm leaving this group">
+            <p className="text-red-900">Leaving removes your household grocery list from this group.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" disabled={isLeaving} onClick={() => setConfirmLeaving(false)}>Stay in group</Button>
+              <Button size="sm" variant="danger" isLoading={isLeaving} onClick={handleLeave}>Leave and remove list</Button>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
           {isMember && !isOrganizer && isOpenStatus && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleLeave}
+              onClick={() => setConfirmLeaving(true)}
               isLoading={isLeaving}
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
             >
@@ -270,7 +279,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
             </Button>
           )}
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             {isMember ? (
               <>
                 {group.status === 'CONFIRMING' && onOpenConfirmation && (
@@ -283,7 +292,7 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
                       onOpenConfirmation(group)
                     }}
                   >
-                    Confirm Order (M4)
+                    Confirm order
                   </Button>
                 )}
                 {onOpenSavings && (
@@ -321,15 +330,15 @@ export const GroupDetailModal: React.FC<GroupDetailModalProps> = ({
                   My Grocery List
                 </Button>
               </>
-            ) : (
+            ) : isOpenStatus && !isPrivate ? (
               <Button
                 size="sm"
                 onClick={handleJoin}
                 isLoading={isJoining}
               >
-                Join This Group
+                Join this group
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

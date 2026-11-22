@@ -458,6 +458,10 @@ def test_hub_pickup_verification_and_fulfillment(setup_m5_data):
     )
     assert org_fuls.status_code == 200
     assert len(org_fuls.json()) == 2
+    customer_record = next(record for record in org_fuls.json() if record["user_id"] == my_ful["user_id"])
+    assert customer_record["pickup_code"] is None
+    assert customer_record["delivery_address"] is None
+    assert customer_record["user_phone"] is None
 
     # 3. Organizer enters customer pickup code
     verify_res = client.post(

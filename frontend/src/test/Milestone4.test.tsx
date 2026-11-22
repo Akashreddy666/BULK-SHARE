@@ -103,7 +103,7 @@ const mockOrder: GroupOrder = {
 }
 
 describe('Milestone 4 Frontend Components', () => {
-  it('renders ConfirmationRoundPanel with approval progress and member list', () => {
+  it('renders ConfirmationRoundPanel with aggregate approval progress', () => {
     render(
       <ConfirmationRoundPanel
         round={mockRound}
@@ -113,9 +113,9 @@ describe('Milestone 4 Frontend Components', () => {
     )
 
     expect(screen.getByText(/Confirmation Round 1/i)).toBeInTheDocument()
-    expect(screen.getByText('Priya Sharma')).toBeInTheDocument()
-    expect(screen.getByText('Rahul Verma')).toBeInTheDocument()
-    expect(screen.getByText('Sneha Patel')).toBeInTheDocument()
+    expect(screen.queryByText('Priya Sharma')).not.toBeInTheDocument()
+    expect(screen.queryByText('Rahul Verma')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sneha Patel')).not.toBeInTheDocument()
     expect(screen.getByText(/2 of 3 members approved/i)).toBeInTheDocument()
     expect(screen.getByText(/Lock Confirmed Order/i)).toBeInTheDocument()
   })
@@ -156,6 +156,7 @@ describe('Milestone 4 Frontend Components', () => {
     fireEvent.click(toggleBtn)
 
     expect(screen.getByText(/Hide Frozen Allocation Details/i)).toBeInTheDocument()
-    expect(screen.getByText(/Flat 101, Palm Grove/i)).toBeInTheDocument()
+    expect(screen.getByText('Your household allocation')).toBeInTheDocument()
+    expect(screen.queryByText(/Flat 101, Palm Grove/i)).not.toBeInTheDocument()
   })
 })

@@ -312,7 +312,7 @@ export function OrganizerDashboard({ onOpenHousehold }: { onOpenHousehold: () =>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {organizedGroups.map((g) => (
-                <div key={g.id} className="relative">
+                <div key={g.id} className="flex min-w-0 flex-col">
                   <GroupCard
                     group={g}
                     onSelect={(grp) => {
@@ -440,6 +440,7 @@ export function OrganizerDashboard({ onOpenHousehold }: { onOpenHousehold: () =>
       />
 
       <GroupDetailModal
+        key={selectedGroup?.id}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         group={selectedGroup}
@@ -459,6 +460,7 @@ export function OrganizerDashboard({ onOpenHousehold }: { onOpenHousehold: () =>
 
       {catalogGroup && (
         <ProductCatalogModal
+          key={catalogGroup.id}
           isOpen={isCatalogOpen}
           onClose={() => setIsCatalogOpen(false)}
           groupId={catalogGroup.id}
@@ -468,6 +470,7 @@ export function OrganizerDashboard({ onOpenHousehold }: { onOpenHousehold: () =>
 
       {listGroup && (
         <HouseholdGroceryListModal
+          key={listGroup.id}
           isOpen={isListOpen}
           onClose={() => setIsListOpen(false)}
           groupId={listGroup.id}

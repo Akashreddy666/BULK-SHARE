@@ -98,17 +98,18 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-1">
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
+          <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">
+          <label htmlFor="buying-group-name" className="block text-xs font-semibold text-slate-700 mb-1">
             Group Name *
           </label>
           <Input
+            id="buying-group-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., 100ft Road Grocery Club"
@@ -117,28 +118,30 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">
+          <label htmlFor="buying-group-description" className="block text-xs font-semibold text-slate-700 mb-1">
             Description (Optional)
           </label>
           <textarea
+            id="buying-group-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Specify apartment wing, schedule, or preferences (e.g. Sona Masoori Rice & Cold Pressed Oil)"
             rows={2}
-            className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            className="control w-full"
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="buying-group-neighborhood" className="block text-xs font-semibold text-slate-700 mb-1">
               Neighborhood *
             </label>
             <div className="relative">
               <select
+                id="buying-group-neighborhood"
                 value={neighborhoodId}
                 onChange={(e) => setNeighborhoodId(e.target.value)}
-                className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="control w-full"
                 required
               >
                 {neighborhoods.map((n) => (
@@ -151,10 +154,11 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="buying-group-minimum" className="block text-xs font-semibold text-slate-700 mb-1">
               Minimum Households *
             </label>
             <Input
+              id="buying-group-minimum"
               type="number"
               min={2}
               max={50}
@@ -166,13 +170,14 @@ export const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">
+          <label htmlFor="buying-group-deadline" className="block text-xs font-semibold text-slate-700 mb-1">
             Group Closes In (Order Cutoff)
           </label>
           <select
+            id="buying-group-deadline"
             value={deadlineDays}
             onChange={(e) => setDeadlineDays(Number(e.target.value))}
-            className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="control w-full"
           >
             <option value={3}>3 Days (Fast Pool)</option>
             <option value={5}>5 Days</option>

@@ -22,6 +22,8 @@ export interface User {
   updated_at: string
 }
 
+export type AdminAccount = Pick<User, 'id' | 'full_name' | 'email' | 'role' | 'is_active'>
+
 export interface HealthResponse {
   status: string
   project: string
@@ -323,6 +325,14 @@ export interface ConfirmationRound {
   confirmed_count: number
   rejected_count: number
   pending_count: number
+  home_delivery_surcharge?: number
+  household_items?: Array<{
+    variant_id: string
+    variant_name: string
+    pack_count: number
+    price_per_pack: number
+    line_total: number
+  }>
   confirmations: MemberConfirmation[]
   selected_quotation?: SupplierQuotation | null
   created_at: string
