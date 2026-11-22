@@ -81,8 +81,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="flex rounded-lg bg-slate-100 p-1 text-xs font-semibold text-slate-600">
           <button
             type="button"
+            aria-pressed={mode === 'login'}
             onClick={() => { setMode('login'); setErrorMessage(null); }}
-            className={`flex-1 py-2 rounded-md transition-all ${
+            className={`min-h-11 flex-1 rounded-lg text-sm transition-colors ${
               mode === 'login' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
             }`}
           >
@@ -90,8 +91,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
           <button
             type="button"
+            aria-pressed={mode === 'register'}
             onClick={() => { setMode('register'); setErrorMessage(null); }}
-            className={`flex-1 py-2 rounded-md transition-all ${
+            className={`min-h-11 flex-1 rounded-lg text-sm transition-colors ${
               mode === 'register' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
             }`}
           >
@@ -100,7 +102,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {errorMessage && (
-          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+          <div role="alert" className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
             {errorMessage}
           </div>
         )}
@@ -110,6 +112,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <>
               <Input
                 label="Full Name"
+                autoComplete="name"
                 placeholder="e.g. Priya Sharma"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -123,6 +126,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
+                    aria-pressed={role === 'CUSTOMER'}
                     onClick={() => setRole('CUSTOMER')}
                     className={`py-2 px-3 rounded-lg border text-xs font-medium text-left transition-all ${
                       role === 'CUSTOMER'
@@ -135,6 +139,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </button>
                   <button
                     type="button"
+                    aria-pressed={role === 'SUPPLIER'}
                     onClick={() => setRole('SUPPLIER')}
                     className={`py-2 px-3 rounded-lg border text-xs font-medium text-left transition-all ${
                       role === 'SUPPLIER'
@@ -153,6 +158,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <Input
             label="Email Address"
             type="email"
+            autoComplete="email"
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -162,6 +168,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <Input
             label="Password"
             type="password"
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

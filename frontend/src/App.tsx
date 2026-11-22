@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useState } from 'react'
 import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { DemoBanner } from '@/components/layout/DemoBanner'
@@ -7,10 +7,12 @@ import { Footer } from '@/components/layout/Footer'
 import { AuthModal } from '@/components/auth/AuthModal'
 import { DemoRoleSwitcher } from '@/components/auth/DemoRoleSwitcher'
 import { LandingPage } from '@/pages/LandingPage'
-import { CustomerDashboard } from '@/pages/dashboards/CustomerDashboard'
-import { OrganizerDashboard } from '@/pages/dashboards/OrganizerDashboard'
-import { SupplierDashboard } from '@/pages/dashboards/SupplierDashboard'
-import { AdminDashboard } from '@/pages/dashboards/AdminDashboard'
+import { PanelLoading } from '@/components/dashboard/Dashboard'
+
+const CustomerDashboard = lazy(() => import('@/pages/dashboards/CustomerDashboard').then((module) => ({ default: module.CustomerDashboard })))
+const OrganizerDashboard = lazy(() => import('@/pages/dashboards/OrganizerDashboard').then((module) => ({ default: module.OrganizerDashboard })))
+const SupplierDashboard = lazy(() => import('@/pages/dashboards/SupplierDashboard').then((module) => ({ default: module.SupplierDashboard })))
+const AdminDashboard = lazy(() => import('@/pages/dashboards/AdminDashboard').then((module) => ({ default: module.AdminDashboard })))
 
 const AppContent: React.FC = () => {
   const { user } = useAuth()
@@ -90,7 +92,7 @@ const AppContent: React.FC = () => {
 
       <main id="main-content" tabIndex={-1} className="flex-1 outline-none">
         {currentView === 'dashboard' ? (
-          renderDashboard()
+          <Suspense fallback={<div className="site-container py-10"><PanelLoading label="Loading your dashboard" /></div>}>{renderDashboard()}</Suspense>
         ) : (
           <LandingPage
             onOpenAuth={handleOpenAuth}

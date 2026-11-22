@@ -1,5 +1,5 @@
 import React from 'react'
-import { UserCheck, Shield, Store, Users, Sparkles, Check } from 'lucide-react'
+import { UserCheck, Shield, Store, Users, Check } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
@@ -16,7 +16,7 @@ export const DemoRoleSwitcher: React.FC<DemoRoleSwitcherProps> = ({
   onClose,
   onNavigateToDashboard,
 }) => {
-  const { user, demoLogin, isLoading } = useAuth()
+  const { user, demoLogin, isLoading, error } = useAuth()
 
   const roles = [
     {
@@ -64,8 +64,8 @@ export const DemoRoleSwitcher: React.FC<DemoRoleSwitcherProps> = ({
       if (onNavigateToDashboard) {
         onNavigateToDashboard()
       }
-    } catch (err) {
-      console.error('Role switch failed:', err)
+    } catch {
+      // AuthContext shows the request error in the dialog.
     }
   }
 
@@ -73,25 +73,20 @@ export const DemoRoleSwitcher: React.FC<DemoRoleSwitcherProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Evaluator Demo Role Switcher"
-      description="One-click switch between the 4 user personas to test all system features."
+      title="Demo Persona Switcher"
+      description="Choose a sample account to explore its workspace."
     >
       <div className="space-y-3">
-        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
-          <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <span>
-            Selecting a persona issues a real signed backend token for that persona and updates your dashboard shell.
-          </span>
-        </div>
+        {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
 
         <div className="grid grid-cols-1 gap-2.5">
-          {roles.map((item, idx) => {
+          {roles.map((item) => {
             const Icon = item.icon
             const isCurrent = user?.email === item.email
 
             return (
               <button
-                key={idx}
+                key={item.email}
                 onClick={() => handleSelectRole(item.role, item.email)}
                 disabled={isLoading}
                 className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-start gap-3 relative ${
@@ -104,7 +99,7 @@ export const DemoRoleSwitcher: React.FC<DemoRoleSwitcherProps> = ({
                   <Icon className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0 pr-6">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-sm text-slate-900">{item.title}</span>
                     {isCurrent && (
                       <span className="text-[10px] bg-brand-600 text-white px-1.5 py-0.5 rounded font-medium">
@@ -112,10 +107,10 @@ export const DemoRoleSwitcher: React.FC<DemoRoleSwitcherProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-medium text-slate-700 mt-0.5">
-                    {item.name} <span className="text-slate-400 font-normal">({item.email})</span>
+                  <p className="text-sm font-medium text-slate-700 mt-0.5">
+                    {item.name}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1 leading-snug line-clamp-2">
+                  <p className="text-sm text-slate-600 mt-1 leading-snug">
                     {item.desc}
                   </p>
                 </div>

@@ -214,12 +214,13 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
               className="text-red-700 border-red-300 hover:bg-red-50"
               onClick={() => handleAction('REJECTED')}
               isLoading={isSubmitting}
+              disabled={!myConfirmation || round.status !== 'OPEN' || !!successMsg}
             >
               Confirm Rejection
             </Button>
           )}
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
               Close
             </Button>
@@ -228,6 +229,7 @@ export const MemberConfirmationModal: React.FC<MemberConfirmationModalProps> = (
               size="sm"
               onClick={() => handleAction('ACCEPTED')}
               isLoading={isSubmitting}
+              disabled={!myConfirmation || round.status !== 'OPEN' || !!successMsg}
             >
               Accept & Confirm Order
             </Button>

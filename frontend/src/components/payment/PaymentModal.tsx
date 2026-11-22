@@ -10,7 +10,7 @@ import {
   Building,
 } from 'lucide-react'
 import { api } from '@/services/api'
-import { HouseholdInvoice, PaymentTransaction } from '@/types'
+import { HouseholdInvoice } from '@/types'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -34,7 +34,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [paymentError, setPaymentError] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CARD' | 'NET_BANKING'>('UPI')
-  const [completedPayment, setCompletedPayment] = useState<PaymentTransaction | null>(null)
+  const [completedPayment, setCompletedPayment] = useState<{
+    amount: number
+    transaction_ref?: string | null
+    receipt_number?: string | null
+    paid_at?: string | null
+  } | null>(null)
 
   useEffect(() => {
     if (isOpen && groupOrderId) {
@@ -53,17 +58,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       if (data.payment_status === 'PAID') {
         // Already paid
         setCompletedPayment({
-          id: 'existing',
-          group_order_id: groupOrderId,
-          user_id: data.user_id,
           amount: data.final_payable,
-          currency: 'INR',
-          payment_method: 'UPI',
-          transaction_ref: data.transaction_ref || 'TXN-BS-PAID',
-          receipt_number: data.receipt_number || 'RCP-BS-PAID',
-          status: 'COMPLETED',
-          paid_at: data.paid_at || new Date().toISOString(),
-          created_at: data.paid_at || new Date().toISOString(),
+          transaction_ref: data.transaction_ref,
+          receipt_number: data.receipt_number,
+          paid_at: data.paid_at,
         })
       }
     } catch (err: unknown) {
@@ -136,7 +134,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       Official Tax Invoice
                     </span>
                     <h4 className="font-bold text-slate-900 text-sm">
-                      Receipt #{completedPayment.receipt_number}
+                      {completedPayment.receipt_number ? `Receipt #${completedPayment.receipt_number}` : 'Payment received'}
                     </h4>
                   </div>
                   <Badge variant="success">PAID</Badge>
@@ -146,13 +144,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   <div>
                     <span className="text-slate-400 block text-[10px]">TRANSACTION REF</span>
                     <span className="font-mono font-medium text-slate-800">
-                      {completedPayment.transaction_ref}
+                      {completedPayment.transaction_ref ?? 'Unavailable'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-400 block text-[10px]">PAYMENT DATE</span>
                     <span className="font-medium text-slate-800">
-                      {new Date(completedPayment.paid_at).toLocaleString()}
+                      {completedPayment.paid_at ? new Date(completedPayment.paid_at).toLocaleString() : 'Unavailable'}
                     </span>
                   </div>
                   <div>

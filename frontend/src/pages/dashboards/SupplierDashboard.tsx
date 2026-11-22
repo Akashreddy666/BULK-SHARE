@@ -400,7 +400,7 @@ export function SupplierDashboard() {
                         <td className="px-3 py-3 font-bold tabular-nums">{formatCurrency(offer.offer_price_per_pack)}</td>
                         <td className="px-3 py-3">{offer.max_order_packs === null || offer.max_order_packs === undefined ? `${offer.min_order_packs}+` : `${offer.min_order_packs}–${offer.max_order_packs}`} packs</td>
                         <td className="px-3 py-3"><Badge variant={offer.is_active ? 'success' : 'neutral'}>{offer.is_active ? 'Active' : 'Inactive'}</Badge></td>
-                        <td className="px-3 py-3"><Button variant="ghost" size="sm" onClick={() => setEditingOffer(offer)} aria-label={`Edit ${offer.variant_display_name || offer.variant_id}`}>Edit</Button></td>
+                        <td className="px-3 py-3">{profile?.is_verified && <Button variant="ghost" size="sm" onClick={() => setEditingOffer(offer)} aria-label={`Edit ${offer.variant_display_name || offer.variant_id}`}>Edit</Button>}</td>
                       </tr>
                     ))}
                   </tbody>

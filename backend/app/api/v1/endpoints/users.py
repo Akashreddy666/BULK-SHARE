@@ -105,6 +105,9 @@ def demo_login(
         db.commit()
         db.refresh(user)
 
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+
     token = create_demo_token(
         user_id=user.id,
         email=user.email,

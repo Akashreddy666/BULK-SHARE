@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useId, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -24,7 +24,7 @@ export function Modal({ isOpen, onClose, title, description, children, className
   const titleId = useId()
   const descriptionId = useId()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = dialogRef.current
     if (!dialog || !isOpen) return
 
@@ -33,9 +33,14 @@ export function Modal({ isOpen, onClose, title, description, children, className
       return () => dialog.removeAttribute('open')
     }
 
+    const trigger = document.activeElement
     dialog.showModal()
     return () => {
+      const restoreFocus = dialog.contains(document.activeElement) || document.activeElement === document.body
       if (dialog.open) dialog.close()
+      if (restoreFocus && trigger instanceof HTMLElement && trigger.isConnected) {
+        trigger.focus({ preventScroll: true })
+      }
     }
   }, [isOpen])
 

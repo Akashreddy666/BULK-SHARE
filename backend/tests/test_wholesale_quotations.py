@@ -269,6 +269,17 @@ def test_supplier_profile_and_offer_lifecycle(setup_m3_data, db_session):
         "min_order_packs": 5,
         "max_order_packs": 100,
     }
+    blocked_offer = client.post(
+        "/api/v1/suppliers/me/offers",
+        json=offer_payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert blocked_offer.status_code == 403
+
+    profile = db_session.get(SupplierProfile, res_prof.json()["id"])
+    profile.is_verified = True
+    db_session.commit()
+
     res_offer = client.post(
         "/api/v1/suppliers/me/offers",
         json=offer_payload,

@@ -18,11 +18,12 @@ from app.schemas.wholesale import (
 )
 
 router = APIRouter(prefix="/suppliers", tags=["Suppliers & Offers"])
+supplier_account = require_role(UserRole.SUPPLIER, UserRole.ADMIN)
 
 
 @router.get("/me/profile", response_model=SupplierProfileRead)
 def get_my_supplier_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(supplier_account),
     db: Session = Depends(get_db),
 ):
     """Get the current authenticated supplier's company profile."""
@@ -41,7 +42,7 @@ def get_my_supplier_profile(
 @router.post("/me/profile", response_model=SupplierProfileRead, status_code=status.HTTP_201_CREATED)
 def create_or_update_my_supplier_profile(
     payload: SupplierProfileCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(supplier_account),
     db: Session = Depends(get_db),
 ):
     """Create or initialize supplier company profile."""
@@ -74,7 +75,7 @@ def create_or_update_my_supplier_profile(
 @router.patch("/me/profile", response_model=SupplierProfileRead)
 def update_my_supplier_profile(
     payload: SupplierProfileUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(supplier_account),
     db: Session = Depends(get_db),
 ):
     """Update current supplier's company profile."""
@@ -102,7 +103,7 @@ def update_my_supplier_profile(
 
 @router.get("/me/offers", response_model=List[SupplierProductOfferRead])
 def list_my_product_offers(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(supplier_account),
     db: Session = Depends(get_db),
 ):
     """List product SKUs and wholesale prices offered by the logged-in supplier."""
@@ -132,7 +133,7 @@ def list_my_product_offers(
 @router.post("/me/offers", response_model=SupplierProductOfferRead, status_code=status.HTTP_201_CREATED)
 def create_product_offer(
     payload: SupplierProductOfferCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(supplier_account),
     db: Session = Depends(get_db),
 ):
     """Add a product offer with supplier pricing."""
@@ -145,6 +146,9 @@ def create_product_offer(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You must create a supplier profile before adding product offers",
         )
+
+    if not profile.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supplier verification is required to publish offers")
 
     # Check variant exists
     variant = db.execute(
@@ -194,7 +198,7 @@ def create_product_offer(
 def update_product_offer(
     offer_id: str,
     payload: SupplierProductOfferUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(supplier_account),
     db: Session = Depends(get_db),
 ):
     """Update pricing or quantity thresholds on an offer."""
@@ -203,6 +207,9 @@ def update_product_offer(
     ).scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supplier profile not found")
+
+    if not profile.is_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Supplier verification is required to edit offers")
 
     offer = db.execute(
         select(SupplierProductOffer)
@@ -232,7 +239,7 @@ def update_product_offer(
 @router.delete("/me/offers/{offer_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_product_offer(
     offer_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(supplier_account),
     db: Session = Depends(get_db),
 ):
     """Deactivate or delete an offered product."""

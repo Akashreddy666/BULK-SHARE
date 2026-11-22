@@ -62,7 +62,7 @@ export function LandingPage({ onOpenAuth, onOpenDemoSwitcher, onNavigateToDashbo
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-800">
               <MapPin aria-hidden="true" className="size-4" /> Neighborhood grocery buying
             </p>
-            <h1 id="hero-title" className="max-w-[11ch] font-display text-[clamp(2.9rem,6.2vw,5.5rem)] leading-[.99] tracking-[-.045em] text-brand-950">
+            <h1 id="hero-title" className="text-balance font-display text-[clamp(2.65rem,5.8vw,5rem)] leading-[.99] tracking-[-.045em] text-brand-950">
               Better grocery prices, <span className="text-brand-600">together.</span>
             </h1>
             <p className="mt-5 max-w-[29rem] text-base leading-relaxed text-slate-700 sm:text-lg">
@@ -83,9 +83,7 @@ export function LandingPage({ onOpenAuth, onOpenDemoSwitcher, onNavigateToDashbo
               <source media="(max-width: 640px)" srcSet="/pantry/hero-small.webp" />
               <img src="/pantry/hero.webp" alt="Rice, lentils, flour and sunflower oil beside an olive canvas market bag" width="1440" height="960" fetchPriority="high" className="aspect-[4/3] w-full object-cover sm:aspect-[6/5]" />
             </picture>
-            <figcaption className="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-2 text-xs font-semibold text-brand-950 shadow-panel sm:bottom-5 sm:left-5 sm:text-sm">
-              <ShoppingBag aria-hidden="true" className="size-4 text-brand-700" /> Everyday pantry essentials
-            </figcaption>
+
           </figure>
         </div>
       </section>

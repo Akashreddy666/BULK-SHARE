@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { FlaskConical, LayoutGrid, LogOut, Menu, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
@@ -15,6 +15,7 @@ interface NavbarProps {
 
 export function Navbar({ onOpenAuth, onOpenDemoSwitcher, currentView, onNavigate }: NavbarProps) {
   const { user, logout } = useAuth()
+  const mobileMenuToggle = useRef<HTMLButtonElement>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const dashboardLabel = user?.role === 'ADMIN' ? 'Admin console' : user?.role === 'SUPPLIER' ? 'Supplier portal' : 'Dashboard'
 
@@ -34,7 +35,7 @@ export function Navbar({ onOpenAuth, onOpenDemoSwitcher, currentView, onNavigate
       onKeyDown={(event) => {
         if (event.key === 'Escape' && mobileMenuOpen) {
           setMobileMenuOpen(false)
-          document.getElementById('mobile-menu-toggle')?.focus()
+          mobileMenuToggle.current?.focus()
         }
       }}
     >
@@ -57,7 +58,7 @@ export function Navbar({ onOpenAuth, onOpenDemoSwitcher, currentView, onNavigate
           </Button>
           {user ? (
             <>
-              <NotificationBell />
+              <NotificationBell key={user.id} />
               <Button size="sm" className="hidden sm:inline-flex" onClick={() => navigate('dashboard')} aria-current={currentView === 'dashboard' ? 'page' : undefined}>
                 <LayoutGrid aria-hidden="true" className="size-4" /> {dashboardLabel}
               </Button>
@@ -73,7 +74,7 @@ export function Navbar({ onOpenAuth, onOpenDemoSwitcher, currentView, onNavigate
           )}
           <button
             type="button"
-            id="mobile-menu-toggle"
+            ref={mobileMenuToggle}
             aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-navigation"
@@ -93,14 +94,14 @@ export function Navbar({ onOpenAuth, onOpenDemoSwitcher, currentView, onNavigate
             </button>
           ))}
           <div className="flex flex-wrap gap-2 border-t border-line pt-3">
-            <Button variant="outline" size="sm" onClick={() => { onOpenDemoSwitcher(); setMobileMenuOpen(false) }}>Try demo roles</Button>
+            <Button variant="outline" size="sm" onClick={() => { mobileMenuToggle.current?.focus(); setMobileMenuOpen(false); onOpenDemoSwitcher() }}>Try demo roles</Button>
             {user ? (
               <>
                 <Button size="sm" onClick={() => navigate('dashboard')}>{dashboardLabel}</Button>
                 <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => { onOpenAuth('login'); setMobileMenuOpen(false) }}>Sign in</Button>
+              <Button variant="ghost" size="sm" onClick={() => { mobileMenuToggle.current?.focus(); setMobileMenuOpen(false); onOpenAuth('login') }}>Sign in</Button>
             )}
           </div>
         </div>
