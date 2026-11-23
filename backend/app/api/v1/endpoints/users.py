@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.demo import DEMO_USERS
 from app.core.security import get_current_user, create_demo_token
 from app.models.neighborhood import Neighborhood
 from app.models.user import User, UserRole
@@ -74,36 +75,25 @@ def demo_login(
             detail="Demo login is disabled in production environment",
         )
 
-    role_val = payload.role.value if isinstance(payload.role, UserRole) else str(payload.role)
-
-    demo_email_map = {
-        UserRole.CUSTOMER.value: "priya.customer@bulkshare.com",
-        UserRole.SUPPLIER.value: "kisan.wholesaler@bulkshare.com",
-        UserRole.ADMIN.value: "admin@bulkshare.com",
-    }
-    
-    email = payload.email or demo_email_map.get(role_val, "priya.customer@bulkshare.com")
-    if "organizer" in str(payload.email).lower():
-        email = "rahul.organizer@bulkshare.com"
-
-    stmt = (
-        select(User)
-        .where(User.email == email)
-        .options(joinedload(User.neighborhood))
+    persona = next(
+        (
+            entry for entry in DEMO_USERS
+            if entry["role"] == payload.role.value
+            and (payload.email is None or entry["email"] == payload.email.lower())
+        ),
+        None,
     )
-    user = db.execute(stmt).scalar_one_or_none()
+    if persona is None:
+        raise HTTPException(status_code=400, detail="Choose one of the demo personas.")
 
-    if not user:
-        user = User(
-            supabase_uid=f"demo-uid-{role_val.lower()}",
-            email=email,
-            full_name=f"Demo {role_val.title()} User",
-            role=role_val,
-            is_active=True,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    user = db.execute(
+        select(User)
+        .where(User.supabase_uid == persona["supabase_uid"], User.role == persona["role"])
+        .options(joinedload(User.neighborhood))
+    ).scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(status_code=503, detail="Demo accounts are unavailable. Check that the backend has seeded its demo data.")
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")

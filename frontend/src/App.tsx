@@ -104,14 +104,15 @@ const AppContent: React.FC = () => {
 
       <Footer onNavigate={handleNavigate} />
 
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialMode={authInitialMode}
-        onOpenDemoSwitcher={handleOpenDemoSwitcher}
-        onSuccess={openDashboard}
-      />
+      {authModalOpen && (
+        <AuthModal
+          isOpen
+          onClose={() => setAuthModalOpen(false)}
+          initialMode={authInitialMode}
+          onOpenDemoSwitcher={handleOpenDemoSwitcher}
+          onSuccess={openDashboard}
+        />
+      )}
 
       {/* Evaluator Demo Role Switcher */}
       <DemoRoleSwitcher

@@ -48,10 +48,27 @@ test('auth dialog restores keyboard focus', async ({ page }) => {
   const signIn = page.getByRole('button', { name: 'Sign in', exact: true })
   await signIn.click()
   const dialog = page.getByRole('dialog', { name: 'Sign in to BULK SHARE' })
-  await expect(dialog.getByLabel('Email address')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Continue with demo roles' })).toBeVisible()
+  await expect(dialog.getByLabel('Email address')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
   await expect(signIn).toBeFocused()
+})
+
+test('demo sign-in explains an unavailable backend and can be retried', async ({ page }) => {
+  await page.route('**/api/v1/users/demo-login', (route) => route.fulfill({ status: 502 }))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue with demo roles' }).click()
+
+  const demo = page.getByRole('dialog', { name: 'Demo Persona Switcher' })
+  const customer = demo.getByRole('button', { name: /Priya Sharma/ })
+  await customer.click()
+  await expect(demo.getByRole('alert')).toContainText('Start Uvicorn in the backend terminal on port 8000')
+
+  await page.unroute('**/api/v1/users/demo-login')
+  await customer.click()
+  await expect(page.getByRole('heading', { name: 'Welcome, Priya!' })).toBeVisible()
 })
 
 test('household creates a buying group and adds a private grocery pack', async ({ page }) => {

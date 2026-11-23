@@ -33,7 +33,11 @@ import {
   DisputeCategory,
 } from '@/types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') || '/api/v1'
+
+const unavailableMessage = import.meta.env.DEV && API_BASE_URL === '/api/v1'
+  ? 'BULK SHARE could not reach the local backend. Start Uvicorn in the backend terminal on port 8000, then try again.'
+  : 'The BULK SHARE API is unavailable. Try again in a moment.'
 
 export class ApiError extends Error {
   status: number
@@ -73,7 +77,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   try {
     const res = await fetch(url, { ...options, headers })
     if (!res.ok) {
-      let detail = `Request failed with status ${res.status}`
+      let detail = res.status >= 500 ? unavailableMessage : `Request failed with status ${res.status}`
       try {
         const errorJson = await res.json()
         if (typeof errorJson.detail === 'string') {
@@ -96,7 +100,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     return (await res.json()) as T
   } catch (err: unknown) {
     if (err instanceof ApiError) throw err
-    throw new ApiError('Could not connect to BULK SHARE. Check your connection and try again.', 0)
+    throw new ApiError(unavailableMessage, 0)
   }
 }
 
@@ -104,7 +108,9 @@ export const api = {
   // Auth & System
   getHealth: () => request<HealthResponse>('/health'),
   getNeighborhoods: () => request<Neighborhood[]>('/neighborhoods'),
-  getMe: () => request<User>('/users/me'),
+  getMe: (accessToken?: string) => request<User>('/users/me', accessToken
+    ? { headers: { Authorization: `Bearer ${accessToken}` } }
+    : {}),
   updateMe: (data: Partial<Pick<User, 'full_name' | 'phone' | 'neighborhood_id'>>) =>
     request<User>('/users/me', {
       method: 'PATCH',

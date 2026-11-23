@@ -1,6 +1,7 @@
-import os
+import json
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,7 +13,8 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # CORS configuration
-    CORS_ORIGINS: List[str] = [
+    # The string alternative lets settings load comma-separated environment values.
+    CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
@@ -21,20 +23,13 @@ class Settings(BaseSettings):
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str):
-            if v == "*":
-                return ["*"]
-            if not v.startswith("["):
-                return [i.strip() for i in v.split(",") if i.strip()]
-        elif isinstance(v, list):
-            return v
-        return [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:3000",
-            "https://bulk-share.vercel.app",
-        ]
+    def assemble_cors_origins(cls, value: Union[str, List[str]]) -> List[str]:
+        if isinstance(value, str):
+            value = value.strip()
+            if value.startswith("["):
+                return json.loads(value)
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
     # Database configuration
     # Default to local SQLite with aiosqlite for zero-config local development and testing
