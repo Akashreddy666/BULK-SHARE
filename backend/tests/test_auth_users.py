@@ -1,4 +1,12 @@
+from datetime import datetime, timedelta, timezone
+
+import jwt
+import pytest
 from fastapi.testclient import TestClient
+
+from app.core.config import Settings, settings
+from app.core.demo import DEMO_USERS
+from app.models.user import User
 
 
 def test_get_users_me_unauthorized(client: TestClient):
@@ -43,7 +51,10 @@ def test_list_neighborhoods(client: TestClient):
     assert data[0]["postal_code"] == "560038"
 
 
-def test_demo_login_endpoint(client: TestClient):
+def test_demo_login_endpoint(client: TestClient, db_session):
+    customer = db_session.get(User, "test-customer-01")
+    customer.supabase_uid = DEMO_USERS[0]["supabase_uid"]
+    db_session.commit()
     response = client.post(
         "/api/v1/users/demo-login",
         json={"role": "CUSTOMER"},
@@ -54,6 +65,54 @@ def test_demo_login_endpoint(client: TestClient):
     assert data["token_type"] == "bearer"
     assert data["demo_mode"] is True
     assert data["user"]["email"] == "priya.customer@bulkshare.com"
+
+
+def test_demo_login_uses_only_seeded_personas(client: TestClient):
+    # This fixture deliberately uses a regular account with the same email as a persona.
+    response = client.post("/api/v1/users/demo-login", json={"role": "CUSTOMER"})
+    assert response.status_code == 503
+
+    response = client.post(
+        "/api/v1/users/demo-login",
+        json={"role": "CUSTOMER", "email": "attempt@sample.example"},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("value", [
+    "http://localhost:5173,http://127.0.0.1:5173",
+    '["http://localhost:5173","http://127.0.0.1:5173"]',
+])
+def test_cors_origins_load_from_environment(monkeypatch, value):
+    monkeypatch.setenv("CORS_ORIGINS", value)
+    assert Settings().CORS_ORIGINS == ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+@pytest.mark.parametrize(("metadata_role", "expected_role"), [
+    ("CUSTOMER", "CUSTOMER"),
+    ("SUPPLIER", "SUPPLIER"),
+    ("ADMIN", "CUSTOMER"),
+])
+def test_supabase_sign_in_provisions_supported_account_role(
+    client: TestClient, monkeypatch, metadata_role, expected_role,
+):
+    signing_key = "test-supabase-signing-key-for-unit-coverage"
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", signing_key)
+    token = jwt.encode(
+        {
+            "sub": "test-supabase-user",
+            "email": "new-account@example.com",
+            "role": "authenticated",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "user_metadata": {"full_name": "Sample Account", "role": metadata_role},
+        },
+        signing_key,
+        algorithm="HS256",
+    )
+
+    response = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    assert response.json()["role"] == expected_role
 
 
 def test_unsigned_token_is_rejected_in_demo_mode(client: TestClient):

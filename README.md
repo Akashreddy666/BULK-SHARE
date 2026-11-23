@@ -137,6 +137,10 @@ npm run dev
 ```
 * **Web Application:** `http://localhost:5173`
 
+For a local demo, keep both terminal windows running. The frontend forwards `/api/v1` to FastAPI on port 8000. Open `http://localhost:5173/api/v1/health` to check the connection before signing in. Choose **Sign in → Continue with demo roles** and select a sample account.
+
+To enable email or Google sign-in, configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `frontend/.env.local`, and configure the corresponding Supabase JWT verification settings on the backend. Restart both servers after changing their environment files.
+
 ---
 
 ## 5. Automated Test Suites

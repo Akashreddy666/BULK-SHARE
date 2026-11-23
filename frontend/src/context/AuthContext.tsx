@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, UserRole } from '@/types'
 import { api, getStoredToken, setStoredToken } from '@/services/api'
-import { supabase, isSupabaseConfigured } from '@/services/supabase'
+import { supabase } from '@/services/supabase'
 
 interface AuthContextType {
   user: User | null
@@ -10,7 +10,7 @@ interface AuthContextType {
   error: string | null
   demoMode: boolean
   loginWithPassword: (email: string, password: string) => Promise<void>
-  registerWithPassword: (email: string, password: string, fullName: string, role: UserRole) => Promise<void>
+  registerWithPassword: (email: string, password: string, fullName: string, role: UserRole) => Promise<'authenticated' | 'confirm-email'>
   loginWithGoogle: () => Promise<void>
   demoLogin: (role: UserRole, email?: string) => Promise<void>
   logout: () => void
@@ -19,6 +19,11 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+function requireSupabase() {
+  if (!supabase) throw new Error('Email accounts require Supabase Auth. Choose a demo persona to explore locally.')
+  return supabase
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
@@ -39,97 +44,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const establishSession = async (accessToken: string) => {
+    const profile = await api.getMe(accessToken)
+    setStoredToken(accessToken)
+    setToken(accessToken)
+    setUser(profile)
+  }
+
   useEffect(() => {
     const initAuth = async () => {
-      setIsLoading(true)
-      const stored = getStoredToken()
-      if (stored) {
-        try {
-          const profile = await api.getMe()
-          setUser(profile)
-        } catch {
-          setStoredToken(null)
-          setToken(null)
-          setUser(null)
-        }
+      try {
+        const stored = getStoredToken()
+        const accessToken = stored || (await supabase?.auth.getSession())?.data.session?.access_token
+        if (accessToken) await establishSession(accessToken)
+      } catch {
+        setStoredToken(null)
+        setToken(null)
+        setUser(null)
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
 
-    initAuth()
+    void initAuth()
   }, [])
 
   const loginWithPassword = async (email: string, password: string) => {
     setIsLoading(true)
     setError(null)
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error: sbError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        })
-        if (sbError) throw sbError
-        if (data.session?.access_token) {
-          setStoredToken(data.session.access_token)
-          setToken(data.session.access_token)
-          await refreshProfile()
-        }
-      } else {
-        // Fallback in demo mode
-        await demoLogin('CUSTOMER', email)
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Login failed'
-      setError(msg)
-      throw err
+      const { data, error: authError } = await requireSupabase().auth.signInWithPassword({ email, password })
+      if (authError) throw authError
+      if (!data.session) throw new Error('Sign-in did not return a session. Try again.')
+      await establishSession(data.session.access_token)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const registerWithPassword = async (email: string, _password: string, fullName: string, role: UserRole) => {
+  const registerWithPassword = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: UserRole,
+  ): Promise<'authenticated' | 'confirm-email'> => {
     setIsLoading(true)
     setError(null)
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error: sbError } = await supabase.auth.signUp({
-          email,
-          password: _password,
-          options: {
-            data: { full_name: fullName, role },
-          },
-        })
-        if (sbError) throw sbError
-        if (data.session?.access_token) {
-          setStoredToken(data.session.access_token)
-          setToken(data.session.access_token)
-          await refreshProfile()
-        }
-      } else {
-        // In demo mode: create/login
-        await demoLogin(role, email)
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Registration failed'
-      setError(msg)
-      throw err
+      const { data, error: authError } = await requireSupabase().auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName, role } },
+      })
+      if (authError) throw authError
+      if (!data.session) return 'confirm-email'
+      await establishSession(data.session.access_token)
+      return 'authenticated'
     } finally {
       setIsLoading(false)
     }
   }
 
   const loginWithGoogle = async () => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
-      })
-    } else {
-      // Demo simulated Google sign-in
-      await demoLogin('CUSTOMER', 'priya.customer@bulkshare.com')
-    }
+    const { error: authError } = await requireSupabase().auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    })
+    if (authError) throw authError
   }
 
   const demoLogin = async (role: UserRole, email?: string) => {
@@ -150,9 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const logout = () => {
-    if (isSupabaseConfigured && supabase) {
-      supabase.auth.signOut().catch(() => {})
-    }
+    supabase?.auth.signOut().catch(() => {})
     setStoredToken(null)
     setToken(null)
     setUser(null)

@@ -109,11 +109,12 @@ def get_current_user(
         if not email:
             email = f"user_{supabase_uid[:8]}@example.com"
         
-        full_name = payload.get("name") or payload.get("user_metadata", {}).get("full_name") or email.split("@")[0].title()
-        role = payload.get("role") or UserRole.CUSTOMER.value
-        
-        # Guard: Regular registration cannot self-assign ADMIN
-        if role == UserRole.ADMIN.value and not settings.DEMO_MODE:
+        metadata = payload.get("user_metadata") or {}
+        full_name = payload.get("name") or metadata.get("full_name") or email.split("@")[0].title()
+        # Supabase uses "authenticated" as its top-level API role. Account
+        # preferences can select a household or supplier role during signup.
+        role = metadata.get("role", payload.get("role"))
+        if role not in (UserRole.CUSTOMER.value, UserRole.SUPPLIER.value):
             role = UserRole.CUSTOMER.value
 
         user = User(

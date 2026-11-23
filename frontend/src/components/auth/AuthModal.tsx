@@ -3,8 +3,9 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuth } from '@/context/AuthContext'
+import { isSupabaseConfigured } from '@/services/supabase'
 import { UserRole } from '@/types'
-import { ShoppingBag, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -28,6 +29,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [fullName, setFullName] = useState('')
   const [role, setRole] = useState<UserRole>('CUSTOMER')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false)
+
+  const openDemoRoles = () => {
+    onClose()
+    onOpenDemoSwitcher()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,7 +53,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           setErrorMessage('Please enter your full name.')
           return
         }
-        await registerWithPassword(email, password, fullName, role)
+        const result = await registerWithPassword(email, password, fullName.trim(), role)
+        if (result === 'confirm-email') {
+          setPassword('')
+          setNeedsEmailConfirmation(true)
+          return
+        }
       }
       onClose()
       if (onSuccess) onSuccess()
@@ -58,11 +70,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleGoogleSignIn = async () => {
     try {
       await loginWithGoogle()
-      onClose()
-      if (onSuccess) onSuccess()
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Google sign-in failed')
     }
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Sign in to BULK SHARE"
+        description="This demo uses sample accounts. Choose a persona to open its dashboard."
+      >
+        <Button onClick={openDemoRoles} className="w-full">
+          <Sparkles aria-hidden="true" className="size-4" /> Continue with demo roles
+        </Button>
+      </Modal>
+    )
   }
 
   return (
@@ -82,7 +107,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             aria-pressed={mode === 'login'}
-            onClick={() => { setMode('login'); setErrorMessage(null); }}
+            onClick={() => { setMode('login'); setErrorMessage(null); setNeedsEmailConfirmation(false); }}
             className={`min-h-11 flex-1 rounded-lg text-sm transition-colors ${
               mode === 'login' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
             }`}
@@ -92,7 +117,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             aria-pressed={mode === 'register'}
-            onClick={() => { setMode('register'); setErrorMessage(null); }}
+            onClick={() => { setMode('register'); setErrorMessage(null); setNeedsEmailConfirmation(false); }}
             className={`min-h-11 flex-1 rounded-lg text-sm transition-colors ${
               mode === 'register' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
             }`}
@@ -107,78 +132,87 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3.5">
-          {mode === 'register' && (
-            <>
-              <Input
-                label="Full Name"
-                autoComplete="name"
-                placeholder="e.g. Priya Sharma"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
+        {needsEmailConfirmation ? (
+          <div className="space-y-3">
+            <p role="status" className="rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm text-brand-900">
+              Check your email for the confirmation link, then return here to sign in.
+            </p>
+            <Button onClick={() => { setMode('login'); setNeedsEmailConfirmation(false) }}>Back to sign in</Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3.5">
+            {mode === 'register' && (
+              <>
+                <Input
+                  label="Full Name"
+                  autoComplete="name"
+                  placeholder="e.g. Priya Sharma"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                />
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Account Type
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={role === 'CUSTOMER'}
-                    onClick={() => setRole('CUSTOMER')}
-                    className={`py-2 px-3 rounded-lg border text-xs font-medium text-left transition-all ${
-                      role === 'CUSTOMER'
-                        ? 'border-brand-500 bg-brand-50/70 text-brand-900 ring-1 ring-brand-500'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <span className="font-semibold block">Household Customer</span>
-                    <span className="text-[10px] text-slate-500">Join neighborhood groups</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={role === 'SUPPLIER'}
-                    onClick={() => setRole('SUPPLIER')}
-                    className={`py-2 px-3 rounded-lg border text-xs font-medium text-left transition-all ${
-                      role === 'SUPPLIER'
-                        ? 'border-brand-500 bg-brand-50/70 text-brand-900 ring-1 ring-brand-500'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <span className="font-semibold block">Wholesaler Supplier</span>
-                    <span className="text-[10px] text-slate-500">Provide quotes & bulk supply</span>
-                  </button>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Account Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={role === 'CUSTOMER'}
+                      onClick={() => setRole('CUSTOMER')}
+                      className={`py-2 px-3 rounded-lg border text-xs font-medium text-left transition-all ${
+                        role === 'CUSTOMER'
+                          ? 'border-brand-500 bg-brand-50/70 text-brand-900 ring-1 ring-brand-500'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="font-semibold block">Household Customer</span>
+                      <span className="text-[10px] text-slate-500">Join neighborhood groups</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={role === 'SUPPLIER'}
+                      onClick={() => setRole('SUPPLIER')}
+                      className={`py-2 px-3 rounded-lg border text-xs font-medium text-left transition-all ${
+                        role === 'SUPPLIER'
+                          ? 'border-brand-500 bg-brand-50/70 text-brand-900 ring-1 ring-brand-500'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="font-semibold block">Wholesaler Supplier</span>
+                      <span className="text-[10px] text-slate-500">Provide quotes & bulk supply</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
 
-          <Input
-            label="Email Address"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+            <Input
+              label="Email Address"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-          <Input
-            label="Password"
-            type="password"
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+            <Input
+              label="Password"
+              type="password"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-          <Button type="submit" variant="primary" className="w-full" isLoading={isLoading}>
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
-          </Button>
-        </form>
+            <Button type="submit" variant="primary" className="w-full" isLoading={isLoading}>
+              {mode === 'login' ? 'Sign In' : 'Create Account'}
+            </Button>
+          </form>
+        )}
 
         <div className="relative my-4 text-center">
           <div className="absolute inset-0 flex items-center">
@@ -218,10 +252,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="pt-2 border-t border-slate-100 text-center">
           <button
             type="button"
-            onClick={() => {
-              onClose()
-              onOpenDemoSwitcher()
-            }}
+            onClick={openDemoRoles}
             className="text-xs text-brand-700 hover:text-brand-800 font-medium flex items-center justify-center gap-1.5 mx-auto"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
